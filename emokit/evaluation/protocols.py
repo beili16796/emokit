@@ -20,7 +20,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 from emokit.datasets.base import BaseDataset
 from emokit.features.base import FeaturePipeline
-from emokit.models.base import BaseModel, build_model
+from emokit.models.base import build_model
 from emokit.utils import EmoKitConfigError, set_seed
 
 logger = logging.getLogger(__name__)
@@ -151,7 +151,8 @@ class LOSOEvaluator:
 
             if not train_Xs:
                 logger.warning(
-                    "No training data for fold test_subject=%d (only 1 subject?), skipping",
+                    "No training data for fold test_subject=%d "
+                    "(only 1 subject?), skipping",
                     test_sid,
                 )
                 continue
@@ -189,7 +190,10 @@ class LOSOEvaluator:
                 "y_true": y_test.tolist(),
                 "y_pred": y_pred.tolist(),
             }
-            logger.info("Subject %d — acc=%.4f  f1=%.4f", test_sid, metrics["accuracy"], metrics["f1_macro"])
+            logger.info(
+                "Subject %d — acc=%.4f  f1=%.4f",
+                test_sid, metrics["accuracy"], metrics["f1_macro"],
+            )
 
         result = _aggregate_results(
             per_subject,
@@ -322,7 +326,10 @@ class SubjectDependentEvaluator:
             model.fit(X_tr, y_tr, X_val, y_val)
             metrics = model.evaluate(X_test_feat, y_test)
             per_subject[sid] = metrics
-            logger.info("Subject %d — acc=%.4f  f1=%.4f", sid, metrics["accuracy"], metrics["f1_macro"])
+            logger.info(
+                "Subject %d — acc=%.4f  f1=%.4f",
+                sid, metrics["accuracy"], metrics["f1_macro"],
+            )
 
         return _aggregate_results(
             per_subject,
@@ -446,7 +453,10 @@ class SessionEvaluator:
                 self.dataset.sessions = original_sessions
 
             if not train_Xs or not test_Xs:
-                logger.warning("Insufficient session data for subject %d, skipping", sid)
+                logger.warning(
+                    "Insufficient session data for subject %d, skipping",
+                    sid,
+                )
                 continue
 
             X_train_raw = np.concatenate(train_Xs, axis=0)
@@ -466,7 +476,10 @@ class SessionEvaluator:
             model.fit(X_tr, y_tr, X_val, y_val)
             metrics = model.evaluate(X_test_feat, y_test)
             per_subject[sid] = metrics
-            logger.info("Subject %d — acc=%.4f  f1=%.4f", sid, metrics["accuracy"], metrics["f1_macro"])
+            logger.info(
+                "Subject %d — acc=%.4f  f1=%.4f",
+                sid, metrics["accuracy"], metrics["f1_macro"],
+            )
 
         return _aggregate_results(
             per_subject,
@@ -537,7 +550,8 @@ class ResultLogger:
 
         per_subject = results.get("per_subject", {})
         if per_subject:
-            fieldnames = ["subject_id", *sorted(next(iter(per_subject.values())).keys())]
+            first_metrics = next(iter(per_subject.values()))
+            fieldnames = ["subject_id", *sorted(first_metrics.keys())]
             with open(csv_path, "w", newline="", encoding="utf-8") as fh:
                 writer = csv.DictWriter(fh, fieldnames=fieldnames)
                 writer.writeheader()
@@ -586,7 +600,8 @@ def _aggregate_results(
     if not per_subject:
         return {"per_subject": {}, "mean": {}, "std": {}, "config": config}
 
-    metric_keys = [k for k in next(iter(per_subject.values())) if k != "confusion_matrix"]
+    first_subject_metrics = next(iter(per_subject.values()))
+    metric_keys = [k for k in first_subject_metrics if k != "confusion_matrix"]
     values = {k: [m[k] for m in per_subject.values()] for k in metric_keys}
 
     return {
