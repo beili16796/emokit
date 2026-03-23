@@ -21,15 +21,12 @@ from emokit.models import (
     DGCCAAMModel,
     DGCNNModel,
     EarlyStopping,
-    ModelRegistry,
     PRPLModel,
-    StandardTrainer,
     TransformerMMModel,
     build_model,
     registry,
 )
 from emokit.models.dgcnn import ChebGraphConv
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -546,10 +543,10 @@ def test_bidae_loss_decreases():
     losses = []
     for _ in range(20):
         opt.zero_grad()
-        l = m.compute_loss(x1, x2, y)
-        l.backward()
+        loss = m.compute_loss(x1, x2, y)
+        loss.backward()
         opt.step()
-        losses.append(l.item())
+        losses.append(loss.item())
     assert losses[-1] < losses[0], "BiDAE loss did not decrease"
 
 

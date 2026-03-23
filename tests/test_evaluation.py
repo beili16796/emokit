@@ -21,11 +21,9 @@ from emokit.evaluation.config import (
     DatasetConfig,
     EvaluationConfig,
     ExperimentConfig,
-    FeaturePipelineConfig,
     FeatureStepConfig,
     FullConfig,
     ModelConfig,
-    OutputConfig,
 )
 from emokit.evaluation.protocols import (
     LOSOEvaluator,
@@ -34,7 +32,7 @@ from emokit.evaluation.protocols import (
     compute_metrics,
 )
 from emokit.features.base import BaseTransform, FeaturePipeline
-from emokit.models.base import BaseModel, build_model, registry
+from emokit.models.base import BaseModel, registry
 from emokit.utils import EmoKitConfigError, set_seed
 
 logger = logging.getLogger(__name__)
@@ -484,7 +482,7 @@ class TestResultLogger:
     def test_creates_results_dir(self, tmp_path: Path) -> None:
         target = tmp_path / "deep" / "nested" / "dir"
         assert not target.exists()
-        rl = ResultLogger(results_dir=str(target))
+        _rl = ResultLogger(results_dir=str(target))
         assert target.exists()
 
 

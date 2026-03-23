@@ -214,7 +214,6 @@ class BaseDataset(ABC):
                 data, self._get_fs(), self.window_sec, self.overlap,
             )
 
-            n_trials = data.shape[0]
             n_total = data.shape[2]
             win_samples = int(round(self.window_sec * self._get_fs()))
             step = max(1, int(round(win_samples * (1.0 - self.overlap))))

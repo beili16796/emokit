@@ -13,7 +13,7 @@ import numpy as np
 from scipy.io import loadmat
 from scipy.signal import butter, sosfiltfilt
 
-from emokit.datasets.base import BaseDataset, _REGISTRY
+from emokit.datasets.base import _REGISTRY, BaseDataset
 from emokit.utils import EmoKitDataError
 
 logger = logging.getLogger(__name__)
@@ -160,7 +160,10 @@ class SEEDVDataset(BaseDataset):
         """
         mat = loadmat(str(mat_path), squeeze_me=True)
 
-        data_keys = [k for k in mat if not k.startswith("__") and k != "labels" and k != "label"]
+        data_keys = [
+            k for k in mat
+            if not k.startswith("__") and k != "labels" and k != "label"
+        ]
         trials: list[np.ndarray] = []
         for key in sorted(data_keys):
             arr = np.asarray(mat[key], dtype=np.float64)
@@ -170,7 +173,6 @@ class SEEDVDataset(BaseDataset):
         if not trials:
             raise EmoKitDataError(f"No trial data found in {mat_path}")
 
-        max_ch = max(t.shape[0] for t in trials)
         n_eeg = 62
         n_eog = 3
         data_list: list[np.ndarray] = []
