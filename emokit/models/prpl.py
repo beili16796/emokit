@@ -2,12 +2,12 @@
 # Copyright (c) 2024 EmoKit Contributors
 # See LICENSE for full text.
 
-"""Prototype-Representation / Pairwise-Loss (PR-PL) model for cross-subject EEG emotion recognition."""
+"""Prototype-Representation / Pairwise-Loss (PR-PL) model for cross-subject EEG
+emotion recognition."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -107,7 +107,9 @@ class _PRPL(nn.Module):
                     self.prototypes[c] = z_c
                 else:
                     momentum = 1.0 / (count + 1)
-                    self.prototypes[c] = (1 - momentum) * self.prototypes[c] + momentum * z_c
+                    self.prototypes[c] = (
+                        (1 - momentum) * self.prototypes[c] + momentum * z_c
+                    )
                 self._proto_counts[c] += mask.sum()
 
     def pairwise_loss(
@@ -172,7 +174,9 @@ class _PRPL(nn.Module):
         pred_s = self.domain_disc(z_s_rev)
         pred_t = self.domain_disc(z_t_rev)
 
-        label_s = torch.zeros(z_source.size(0), dtype=torch.long, device=z_source.device)
+        label_s = torch.zeros(
+            z_source.size(0), dtype=torch.long, device=z_source.device
+        )
         label_t = torch.ones(z_target.size(0), dtype=torch.long, device=z_target.device)
 
         loss = F.cross_entropy(pred_s, label_s) + F.cross_entropy(pred_t, label_t)
@@ -193,7 +197,8 @@ class _PRPL(nn.Module):
 
 @registry.register("PR-PL")
 class PRPLModel(BaseModel):
-    """Prototype-Representation / Pairwise-Loss model with domain adversarial adaptation.
+    """Prototype-Representation / Pairwise-Loss model with domain adversarial
+    adaptation.
 
     Learns per-class prototypes (updated as running mean) in a shared embedding
     space with a contrastive pairwise loss.  Supports cross-subject LOSO via
@@ -290,7 +295,9 @@ class PRPLModel(BaseModel):
         if X_target is not None:
             X_tgt = torch.as_tensor(X_target, dtype=torch.float32).to(self.device)
             target_ds = TensorDataset(X_tgt)
-            target_loader = DataLoader(target_ds, batch_size=self.batch_size, shuffle=True)
+            target_loader = DataLoader(
+                target_ds, batch_size=self.batch_size, shuffle=True
+            )
 
         val_loader = None
         if X_val is not None and y_val is not None:
@@ -326,7 +333,9 @@ class PRPLModel(BaseModel):
                     z_tgt = net.encode(x_tgt_b)
                     adv_progress = epoch / max(actual_epochs - 1, 1)
                     alpha = 2.0 / (1.0 + np.exp(-10.0 * adv_progress)) - 1.0
-                    loss = loss + self.lambda_adv * net.domain_adversarial_loss(z, z_tgt, alpha)
+                    loss = loss + self.lambda_adv * net.domain_adversarial_loss(
+                        z, z_tgt, alpha
+                    )
                     loss = loss + self.lambda_pair * net.pairwise_loss_pseudo(z_tgt)
 
                 loss.backward()
