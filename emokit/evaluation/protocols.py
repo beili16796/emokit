@@ -131,8 +131,6 @@ class LOSOEvaluator:
                 logger.warning("No data for subject %d, skipping", sid)
                 continue
             X_subj = np.concatenate(arrays, axis=1)
-            if X_subj.ndim == 3:
-                X_subj = X_subj.reshape(X_subj.shape[0], -1)
             subject_data[sid] = (X_subj, raw["labels"])
 
         per_subject: dict[int, dict[str, Any]] = {}
@@ -298,8 +296,6 @@ class SubjectDependentEvaluator:
                 continue
 
             X_all = np.concatenate(arrays, axis=1)
-            if X_all.ndim == 3:
-                X_all = X_all.reshape(X_all.shape[0], -1)
             y_all = raw["labels"]
 
             if len(y_all) < 4 or len(np.unique(y_all)) < 2:
@@ -437,8 +433,6 @@ class SessionEvaluator:
                 if not arrays:
                     continue
                 X_s = np.concatenate(arrays, axis=1)
-                if X_s.ndim == 3:
-                    X_s = X_s.reshape(X_s.shape[0], -1)
                 y_s = raw["labels"]
 
                 if sess == test_session:

@@ -611,23 +611,14 @@ class TestWilcoxonScriptRuns:
     """Script must run without error on synthetic input."""
 
     def test_wilcoxon_script_runs(self, tmp_path: Path) -> None:
-        import sys
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-        from statistical_analysis import run_pairwise_analysis
+        from emokit.scripts.statistical_analysis import run_pairwise_wilcoxon
 
-        mock_a = {
-            "per_subject": {str(s): {"accuracy": float(np.random.rand())} for s in range(10)},
-            "config": {"model_name": "CNN-LSTM"},
+        mock = {
+            m: {str(s): {"accuracy": float(np.random.rand())} for s in range(10)}
+            for m in ["CNN-LSTM", "DGCNN", "PR-PL"]
         }
-        mock_b = {
-            "per_subject": {str(s): {"accuracy": float(np.random.rand())} for s in range(10)},
-            "config": {"model_name": "DGCNN"},
-        }
-        path_a = tmp_path / "a.json"
-        path_b = tmp_path / "b.json"
-        path_a.write_text(json.dumps(mock_a), encoding="utf-8")
-        path_b.write_text(json.dumps(mock_b), encoding="utf-8")
-
-        results = run_pairwise_analysis([str(path_a), str(path_b)], alpha=0.05)
-        assert len(results) > 0
-        assert "p_value" in results[0]
+        p = tmp_path / "mock.json"
+        p.write_text(json.dumps(mock), encoding="utf-8")
+        results = run_pairwise_wilcoxon(str(p), alpha=0.05)
+        assert "CNN-LSTM vs DGCNN" in results
+        assert "p" in results["CNN-LSTM vs DGCNN"]

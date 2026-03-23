@@ -30,7 +30,7 @@ class DatasetConfig(BaseModel):
     """Dataset specification."""
 
     name: str
-    root: str = "data/"
+    root: str | None = "data/"
     subjects: list[int] | None = None
     window_sec: float | None = 4.0
     overlap: float | None = 0.5
