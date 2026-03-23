@@ -38,6 +38,9 @@ _N_SESSIONS: int = 3
 _FS: float = 200.0
 
 
+SEED_62_CHANNELS: list[str] = list(_EEG_CHANNELS)
+
+
 @_REGISTRY.register("SEED-V")
 class SEEDVDataset(BaseDataset):
     """SEED-V: SJTU Emotion EEG Dataset (five emotions).
@@ -78,6 +81,12 @@ class SEEDVDataset(BaseDataset):
         )
         self.sessions = sessions or list(range(1, _N_SESSIONS + 1))
         self.use_de_features = use_de_features
+        self._pre_extracted: bool = use_de_features
+
+    @property
+    def is_pre_extracted(self) -> bool:
+        """Whether this dataset contains pre-extracted DE features."""
+        return self._pre_extracted
 
     def _get_fs(self) -> float:
         return _FS

@@ -239,6 +239,10 @@ class PRPLModel(BaseModel):
             lambda_adv=self.lambda_adv,
         ).to(self.device)
 
+    def get_attention_weights(self) -> None:
+        """PR-PL is unimodal — no attention weights."""
+        return None
+
     def fit(
         self,
         X_train: np.ndarray,
@@ -247,6 +251,7 @@ class PRPLModel(BaseModel):
         y_val: np.ndarray | None = None,
         subject_ids: np.ndarray | None = None,
         X_target: np.ndarray | None = None,
+        n_epochs: int | None = None,
     ) -> dict[str, list[float]]:
         """Train the PR-PL model.
 
@@ -262,6 +267,8 @@ class PRPLModel(BaseModel):
         Returns:
             Training history dict.
         """
+        actual_epochs = n_epochs if n_epochs is not None else self.n_epochs
+
         if self.seed is not None:
             torch.manual_seed(self.seed)
 
@@ -294,7 +301,7 @@ class PRPLModel(BaseModel):
 
         history: dict[str, list[float]] = {"train_loss": [], "val_acc": []}
 
-        for epoch in tqdm(range(self.n_epochs), desc="PR-PL Training", leave=False):
+        for epoch in tqdm(range(actual_epochs), desc="PR-PL Training", leave=False):
             net.train()
             total_loss = 0.0
             n_batches = 0
@@ -317,7 +324,7 @@ class PRPLModel(BaseModel):
                         (x_tgt_b,) = next(target_iter)
 
                     z_tgt = net.encode(x_tgt_b)
-                    adv_progress = epoch / max(self.n_epochs - 1, 1)
+                    adv_progress = epoch / max(actual_epochs - 1, 1)
                     alpha = 2.0 / (1.0 + np.exp(-10.0 * adv_progress)) - 1.0
                     loss = loss + self.lambda_adv * net.domain_adversarial_loss(z, z_tgt, alpha)
                     loss = loss + self.lambda_pair * net.pairwise_loss_pseudo(z_tgt)

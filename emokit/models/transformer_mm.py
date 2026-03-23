@@ -68,28 +68,50 @@ class _TransformerMM(nn.Module):
         self.head = nn.Linear(d_model, n_classes)
 
     def forward(
-        self, x_eeg: torch.Tensor, x_periph: torch.Tensor
+        self, x_eeg: torch.Tensor, x_periph: torch.Tensor | None = None
     ) -> torch.Tensor:
         """Forward pass.
 
         Args:
             x_eeg: EEG DE features ``(batch, C, n_bands)``.
-            x_periph: Peripheral features ``(batch, n_peripheral_feat)``.
+            x_periph: Peripheral features ``(batch, n_peripheral_feat)`` or None.
 
         Returns:
             Logits ``(batch, n_classes)``.
         """
+        cls_out = self._encode(x_eeg, x_periph)
+        return self.head(cls_out)
+
+    def forward_features(
+        self, x_eeg: torch.Tensor, x_periph: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Return CLS embedding before the classification head.
+
+        Args:
+            x_eeg: EEG DE features ``(batch, C, n_bands)``.
+            x_periph: Peripheral features or None.
+
+        Returns:
+            CLS embedding ``(batch, d_model)``.
+        """
+        return self._encode(x_eeg, x_periph)
+
+    def _encode(
+        self, x_eeg: torch.Tensor, x_periph: torch.Tensor | None = None
+    ) -> torch.Tensor:
         B = x_eeg.size(0)
         eeg_tokens = self.eeg_proj(x_eeg)  # (B, C, d_model)
-        periph_token = self.periph_proj(x_periph).unsqueeze(1)  # (B, 1, d_model)
         cls_tokens = self.cls_token.expand(B, -1, -1)  # (B, 1, d_model)
 
-        tokens = torch.cat([cls_tokens, eeg_tokens, periph_token], dim=1)
-        # NO positional encoding — per Wu et al. 2024 ablation study (Table VII)
+        if x_periph is not None:
+            periph_token = self.periph_proj(x_periph).unsqueeze(1)  # (B, 1, d_model)
+            tokens = torch.cat([cls_tokens, eeg_tokens, periph_token], dim=1)
+        else:
+            tokens = torch.cat([cls_tokens, eeg_tokens], dim=1)
 
+        # NO positional encoding — Wu et al. 2024 Table VII ablation
         encoded = self.encoder(tokens)
-        cls_out = encoded[:, 0, :]  # CLS readout
-        return self.head(cls_out)
+        return encoded[:, 0, :]  # CLS readout
 
 
 @registry.register("Transformer-MM")
@@ -145,23 +167,27 @@ class TransformerMMModel(BaseModel):
 
     def _prepare_data(
         self, X: np.ndarray | dict[str, np.ndarray]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """Split input into EEG and peripheral tensors.
 
-        If *X* is a dict it should have ``'eeg'`` and ``'peripheral'`` keys.
+        If *X* is a dict it should have ``'eeg'`` and optionally ``'peripheral'`` keys.
         If it is a single array, the first ``n_channels * n_bands`` cols are
-        EEG and the remainder peripheral.
+        EEG and the remainder peripheral (or None if exact match).
         """
         if isinstance(X, dict):
             eeg = torch.as_tensor(X["eeg"], dtype=torch.float32).to(self.device)
-            periph = torch.as_tensor(X["peripheral"], dtype=torch.float32).to(
-                self.device
-            )
+            if "peripheral" in X:
+                periph = torch.as_tensor(X["peripheral"], dtype=torch.float32).to(
+                    self.device
+                )
+            else:
+                periph = None
         else:
             X_t = torch.as_tensor(X, dtype=torch.float32).to(self.device)
             eeg_dim = self.n_channels * self.n_bands
             eeg = X_t[:, :eeg_dim].reshape(-1, self.n_channels, self.n_bands)
-            periph = X_t[:, eeg_dim:]
+            remaining = X_t[:, eeg_dim:]
+            periph = remaining if remaining.shape[1] > 0 else None
         if eeg.ndim == 2:
             eeg = eeg.reshape(-1, self.n_channels, self.n_bands)
         return eeg, periph
@@ -243,6 +269,22 @@ class TransformerMMModel(BaseModel):
                 break
 
         return history
+
+    @torch.no_grad()
+    def forward_features(
+        self, X: np.ndarray | dict[str, np.ndarray]
+    ) -> torch.Tensor:
+        """Return CLS embedding before the classification head.
+
+        Args:
+            X: Input features (dict or array).
+
+        Returns:
+            CLS embedding ``(N, d_model)``.
+        """
+        self.network.eval()
+        eeg, periph = self._prepare_data(X)
+        return self.network.forward_features(eeg, periph)
 
     @torch.no_grad()
     def predict(self, X: np.ndarray | dict[str, np.ndarray]) -> np.ndarray:

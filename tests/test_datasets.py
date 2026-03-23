@@ -349,7 +349,7 @@ class TestEdgeCases:
 
     def test_deap_no_file_raises(self, tmp_path: Any) -> None:
         ds = DEAPDataset(root=str(tmp_path))
-        with pytest.raises(EmoKitDataError, match="No .bdf or .dat"):
+        with pytest.raises(FileNotFoundError, match="DEAP file not found"):
             ds.read_raw(1)
 
     def test_window_count_exact_division(self) -> None:
@@ -362,3 +362,27 @@ class TestEdgeCases:
         data = np.zeros((1, 1, 200), dtype=np.float32)
         windows = segment_trials(data, fs=100.0, window_sec=1.0, overlap=0.0)
         assert windows.dtype == np.float32
+
+
+# ======================================================================
+# Paper-aligned DEAP mock test (P1-1)
+# ======================================================================
+
+
+class TestDEAPMockLoader:
+    def test_deap_loader_mock(self, tmp_path: Any) -> None:
+        import pickle
+        data = np.random.randn(40, 40, 8064).astype(np.float32)
+        labels = np.random.rand(40, 4).astype(np.float32) * 8 + 1  # 1-9
+        mock_path = tmp_path / "s01.dat"
+        with open(mock_path, "wb") as f:
+            pickle.dump({"data": data, "labels": labels}, f)
+
+        ds = DEAPDataset(root=str(tmp_path), subjects=[1],
+                         window_sec=4.0, overlap=0.5)
+        raw = ds.read_raw(1)
+        X_eeg = raw["eeg"]
+        y = raw["labels"]
+        assert X_eeg.shape[1] == 32  # 32 EEG channels
+        assert set(y).issubset({0, 1})
+        assert len(ds.get_channel_names("eeg")) == 32

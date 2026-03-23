@@ -103,7 +103,7 @@ class DEAPDataset(BaseDataset):
         raise EmoKitDataError(f"Unknown DEAP modality '{modality}'")
 
     def get_label_names(self) -> list[str]:
-        return ["low", "high"]
+        return ["Low", "High"]
 
     # ------------------------------------------------------------------
     # I/O
@@ -223,8 +223,10 @@ class DEAPDataset(BaseDataset):
             logger.info("Loading %s via DAT", dat_path)
             data, labels = self._load_dat(dat_path)
         else:
-            raise EmoKitDataError(
-                f"No .bdf or .dat file found for subject {subject_id} at {self.root}"
+            raise FileNotFoundError(
+                f"DEAP file not found: {dat_path}\n"
+                f"Please download from http://eecs.qmul.ac.uk/mmv/datasets/deap/\n"
+                f"Set EMOKIT_DATA_ROOT or pass root= explicitly."
             )
 
         result: dict[str, np.ndarray] = {"labels": labels}

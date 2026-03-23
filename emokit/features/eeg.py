@@ -85,7 +85,7 @@ class DEExtractor(BaseTransform):
         Raises:
             ValueError: If *X* is not 3-D.
         """
-        assert X.ndim == 3, f"DEExtractor expects 3-D input (N,C,T), got {X.ndim}-D"
+        assert X.ndim == 3, f"Expected (N,C,T), got {X.shape}"
         n, c, _t = X.shape
         n_bands = len(self.bands)
         de = np.empty((n, c, n_bands), dtype=np.float32)

@@ -15,6 +15,13 @@ from emokit.datasets.base import BaseDataset, _REGISTRY
 
 logger = logging.getLogger(__name__)
 
+_DEAP_32_CHANNELS: list[str] = [
+    "Fp1", "AF3", "F3", "F7", "FC5", "FC1", "C3", "T7",
+    "CP5", "CP1", "P3", "P7", "PO3", "O1", "Oz", "Pz",
+    "Fp2", "AF4", "F4", "F8", "FC6", "FC2", "C4", "T8",
+    "CP6", "CP2", "P4", "P8", "PO4", "O2", "Fz", "Cz",
+]
+
 
 @_REGISTRY.register("SYNTHETIC")
 class SyntheticDataset(BaseDataset):
@@ -89,7 +96,9 @@ class SyntheticDataset(BaseDataset):
         return list(range(1, self.n_subjects + 1))
 
     def get_channel_names(self, modality: str) -> list[str]:
-        """Return generic channel names."""
+        """Return channel names (DEAP 32-channel subset if possible)."""
+        if self.n_channels <= len(_DEAP_32_CHANNELS):
+            return _DEAP_32_CHANNELS[: self.n_channels]
         return [f"SYN{i}" for i in range(self.n_channels)]
 
     def get_label_names(self) -> list[str]:

@@ -36,6 +36,7 @@ class DatasetConfig(BaseModel):
     overlap: float | None = 0.5
     modalities: list[str] | None = None
     label_axis: str | None = None
+    params: dict[str, Any] | None = None
 
     @field_validator("overlap")
     @classmethod

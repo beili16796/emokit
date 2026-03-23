@@ -99,9 +99,7 @@ class LogRegModel(BaseModel):
 
     def __init__(self, n_classes: int = 2, **kwargs: Any) -> None:
         super().__init__(n_classes=n_classes, device="cpu")
-        self._clf = LogisticRegression(
-            max_iter=200, solver="lbfgs", multi_class="multinomial"
-        )
+        self._clf = LogisticRegression(max_iter=200, solver="lbfgs")
 
     def fit(
         self,
@@ -579,3 +577,57 @@ class TestPydanticModels:
     def test_feature_step_default_params(self) -> None:
         step = FeatureStepConfig(name="Foo")
         assert step.params == {}
+
+
+# ---------------------------------------------------------------------------
+# Paper-aligned evaluation tests (P0-6)
+# ---------------------------------------------------------------------------
+
+
+class TestLOSOPerSubjectRawPreds:
+    """Verify per_subject_raw_preds is in LOSO results."""
+
+    def test_raw_preds_in_results(self) -> None:
+        ds = SyntheticDataset(n_subjects=3, n_trials_per_subject=20, seed=42)
+        pipeline = FeaturePipeline([("identity", IdentityTransform())])
+        evaluator = LOSOEvaluator(
+            dataset=ds,
+            feature_pipeline=pipeline,
+            model_config={"n_classes": 2},
+            model_name="_TestLogReg",
+            seed=42,
+        )
+        results = evaluator.run()
+        assert "per_subject_raw_preds" in results
+        for sid in results["per_subject"]:
+            assert sid in results["per_subject_raw_preds"]
+            raw = results["per_subject_raw_preds"][sid]
+            assert "y_true" in raw
+            assert "y_pred" in raw
+            assert len(raw["y_true"]) == len(raw["y_pred"])
+
+
+class TestWilcoxonScriptRuns:
+    """Script must run without error on synthetic input."""
+
+    def test_wilcoxon_script_runs(self, tmp_path: Path) -> None:
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        from statistical_analysis import run_pairwise_analysis
+
+        mock_a = {
+            "per_subject": {str(s): {"accuracy": float(np.random.rand())} for s in range(10)},
+            "config": {"model_name": "CNN-LSTM"},
+        }
+        mock_b = {
+            "per_subject": {str(s): {"accuracy": float(np.random.rand())} for s in range(10)},
+            "config": {"model_name": "DGCNN"},
+        }
+        path_a = tmp_path / "a.json"
+        path_b = tmp_path / "b.json"
+        path_a.write_text(json.dumps(mock_a), encoding="utf-8")
+        path_b.write_text(json.dumps(mock_b), encoding="utf-8")
+
+        results = run_pairwise_analysis([str(path_a), str(path_b)], alpha=0.05)
+        assert len(results) > 0
+        assert "p_value" in results[0]

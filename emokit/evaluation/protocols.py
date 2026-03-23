@@ -136,6 +136,7 @@ class LOSOEvaluator:
             subject_data[sid] = (X_subj, raw["labels"])
 
         per_subject: dict[int, dict[str, Any]] = {}
+        per_subject_raw_preds: dict[int, dict[str, list]] = {}
 
         for test_sid in subject_data:
             logger.info("LOSO fold: test subject = %d", test_sid)
@@ -183,14 +184,21 @@ class LOSOEvaluator:
             else:
                 model.fit(X_tr, y_tr, X_val, y_val)
 
-            metrics = model.evaluate(X_test_feat, y_test)
+            y_pred = model.predict(X_test_feat)
+            metrics = compute_metrics(y_test, y_pred)
             per_subject[test_sid] = metrics
+            per_subject_raw_preds[test_sid] = {
+                "y_true": y_test.tolist(),
+                "y_pred": y_pred.tolist(),
+            }
             logger.info("Subject %d — acc=%.4f  f1=%.4f", test_sid, metrics["accuracy"], metrics["f1_macro"])
 
-        return _aggregate_results(
+        result = _aggregate_results(
             per_subject,
             config={
+                "dataset": type(self.dataset).__name__,
                 "dataset_name": type(self.dataset).__name__,
+                "model": self.model_name,
                 "model_name": self.model_name,
                 "feature_pipeline_str": str(
                     [(n, type(t).__name__) for n, t in self.feature_pipeline.steps]
@@ -199,6 +207,8 @@ class LOSOEvaluator:
                 "protocol": "loso",
             },
         )
+        result["per_subject_raw_preds"] = per_subject_raw_preds
+        return result
 
     @classmethod
     def run_from_yaml(cls, yaml_path: str) -> dict[str, Any]:
@@ -213,6 +223,21 @@ class LOSOEvaluator:
         from emokit.evaluation.config import ConfigLoader
 
         cfg = ConfigLoader.load(yaml_path)
+        return _run_from_full_config(cfg, protocol_cls=cls)
+
+    @classmethod
+    def run_from_config(cls, cfg: dict | Any) -> dict[str, Any]:
+        """Run LOSO evaluation from a config dict or FullConfig object.
+
+        Args:
+            cfg: Either a FullConfig pydantic object or a plain dict.
+
+        Returns:
+            Evaluation results dict.
+        """
+        if isinstance(cfg, dict):
+            from emokit.evaluation.config import FullConfig
+            cfg = FullConfig(**cfg)
         return _run_from_full_config(cfg, protocol_cls=cls)
 
 
@@ -596,6 +621,8 @@ def _run_from_full_config(cfg: Any, protocol_cls: type) -> dict[str, Any]:
         ds_kwargs["modalities"] = cfg.dataset.modalities
     if cfg.dataset.label_axis is not None:
         ds_kwargs["label_axis"] = cfg.dataset.label_axis
+    if hasattr(cfg.dataset, "params") and cfg.dataset.params:
+        ds_kwargs.update(cfg.dataset.params)
     dataset = load_dataset(cfg.dataset.name, **ds_kwargs)
 
     steps: list[tuple[str, Any]] = []

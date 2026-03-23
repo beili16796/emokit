@@ -12,6 +12,7 @@ import tempfile
 import numpy as np
 import pytest
 import torch
+import torch.nn.functional as F
 
 from emokit.models import (
     BaseModel,
@@ -27,6 +28,7 @@ from emokit.models import (
     build_model,
     registry,
 )
+from emokit.models.dgcnn import ChebGraphConv
 
 
 # ---------------------------------------------------------------------------
@@ -459,3 +461,125 @@ class TestSaveLoad:
             proba_before, proba_after, atol=1e-6,
             err_msg="Probabilities differ after save/load round-trip",
         )
+
+
+# ---------------------------------------------------------------------------
+# Paper-aligned DGCNN tests (P0-2)
+# ---------------------------------------------------------------------------
+
+
+def test_dgcnn_forward_shape():
+    m = DGCNNModel(n_classes=2, n_channels=32, n_bands=5)
+    x = torch.randn(8, 32, 5)
+    assert m.predict(x.numpy()).shape == (8,)
+
+
+def test_dgcnn_adjacency_symmetric():
+    m = DGCNNModel(n_classes=2, n_channels=32, n_bands=5)
+    A = m.get_adjacency_matrix()
+    np.testing.assert_allclose(A, A.T, atol=1e-5)
+
+
+def test_dgcnn_adjacency_updates():
+    """W must change after one training step."""
+    m = DGCNNModel(n_classes=2, n_channels=32, n_bands=5)
+    A_before = m.A.data.clone()
+    opt = m.configure_optimizer()
+    logits = m.network(torch.randn(4, 32, 5))
+    loss = F.cross_entropy(logits, torch.randint(0, 2, (4,)))
+    loss.backward()
+    opt.step()
+    assert not torch.allclose(m.A.data, A_before), "Adjacency not learning"
+
+
+def test_cheb_no_pe_dependency():
+    """ChebGraphConv must have no positional encoding parameters."""
+    layer = ChebGraphConv(5, 32, K=2)
+    param_names = [n for n, _ in layer.named_parameters()]
+    assert not any("pos" in n or "position" in n for n in param_names)
+
+
+# ---------------------------------------------------------------------------
+# Paper-aligned Transformer-MM tests (P0-3)
+# ---------------------------------------------------------------------------
+
+
+def test_transformer_mm_no_positional_encoding():
+    m = TransformerMMModel(n_classes=2, n_channels=32, n_bands=5,
+                           n_peripheral_feat=7, d_model=64)
+    all_params = {n for n, _ in m.network.named_parameters()}
+    pe_params = {n for n in all_params
+                 if any(k in n for k in ["pos", "position", "embed"])
+                 if "cls" not in n}
+    assert not pe_params, f"Found PE params: {pe_params}"
+
+
+def test_transformer_mm_with_and_without_peripheral():
+    m = TransformerMMModel(n_classes=2, n_channels=32, n_bands=5,
+                           n_peripheral_feat=7, d_model=64)
+    eeg = torch.randn(4, 32, 5)
+    assert m.predict({"eeg": eeg.numpy()}).shape == (4,)
+    assert m.predict({
+        "eeg": eeg.numpy(),
+        "peripheral": np.random.randn(4, 7).astype(np.float32),
+    }).shape == (4,)
+
+
+def test_transformer_mm_forward_features_shape():
+    m = TransformerMMModel(n_classes=2, n_channels=32, n_bands=5,
+                           n_peripheral_feat=7, d_model=64)
+    feats = m.forward_features({"eeg": np.random.randn(4, 32, 5).astype(np.float32)})
+    assert feats.shape == (4, 64)
+
+
+# ---------------------------------------------------------------------------
+# Paper-aligned BiDAE tests (P0-4)
+# ---------------------------------------------------------------------------
+
+
+def test_bidae_loss_decreases():
+    m = BiDAEModel(n_classes=2, n_feat_mod1=160, n_feat_mod2=7)
+    x1 = torch.randn(16, 160)
+    x2 = torch.randn(16, 7)
+    y = torch.randint(0, 2, (16,))
+    opt = torch.optim.Adam(m.network.parameters(), lr=1e-3)
+    losses = []
+    for _ in range(20):
+        opt.zero_grad()
+        l = m.compute_loss(x1, x2, y)
+        l.backward()
+        opt.step()
+        losses.append(l.item())
+    assert losses[-1] < losses[0], "BiDAE loss did not decrease"
+
+
+def test_bidae_output_shape():
+    m = BiDAEModel(n_classes=2, n_feat_mod1=160, n_feat_mod2=7)
+    logits, z1, z2, r1, r2 = m.network(torch.randn(8, 160), torch.randn(8, 7))
+    assert logits.shape == (8, 2)
+    assert r1.shape == (8, 160)
+    assert r2.shape == (8, 7)
+
+
+# ---------------------------------------------------------------------------
+# Paper-aligned PR-PL tests (P0-5)
+# ---------------------------------------------------------------------------
+
+
+def test_prpl_with_target_domain():
+    m = PRPLModel(n_classes=2, n_feat=160, prototype_dim=64)
+    X_src = np.random.randn(40, 160).astype(np.float32)
+    y_src = np.random.randint(0, 2, 40)
+    X_tgt = np.random.randn(10, 160).astype(np.float32)
+    m.fit(X_src, y_src, X_target=X_tgt, n_epochs=2)
+    preds = m.predict(X_tgt)
+    assert preds.shape == (10,)
+    assert set(preds).issubset({0, 1})
+
+
+def test_prpl_without_target_domain():
+    m = PRPLModel(n_classes=2, n_feat=160, prototype_dim=64)
+    X = np.random.randn(30, 160).astype(np.float32)
+    y = np.random.randint(0, 2, 30)
+    m.fit(X, y, n_epochs=2)
+    assert m.predict(X[:5]).shape == (5,)
