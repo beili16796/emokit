@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from itertools import combinations
 from pathlib import Path
 from typing import Any
@@ -80,8 +79,6 @@ def run_pairwise_wilcoxon(
 
     models = sorted(per_model.keys())
     n_tests = max(1, len(list(combinations(models, 2))))
-    alpha_corrected = alpha / n_tests
-
     results: dict[str, dict[str, Any]] = {}
 
     for m_a, m_b in combinations(models, 2):
@@ -139,7 +136,10 @@ def main() -> None:
         logger.info("Saved to %s", out)
 
     n_sig = sum(1 for r in results.values() if r["significant"] != "ns")
-    logger.info("%d / %d significant at α=%.4f (Bonferroni)", n_sig, len(results), args.alpha)
+    logger.info(
+        "%d / %d significant at α=%.4f (Bonferroni)",
+        n_sig, len(results), args.alpha,
+    )
 
 
 if __name__ == "__main__":

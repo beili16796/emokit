@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -53,8 +52,12 @@ def _print_latex_table(results: dict[str, dict[str, float]]) -> None:
     print("Modalities & Valence (\\%) & Arousal (\\%) \\\\")
     print("\\midrule")
     for mod_key, metrics in results.items():
-        val_str = f"{metrics.get('valence_mean', 0):.1f} ± {metrics.get('valence_std', 0):.1f}"
-        aro_str = f"{metrics.get('arousal_mean', 0):.1f} ± {metrics.get('arousal_std', 0):.1f}"
+        v_m = metrics.get("valence_mean", 0)
+        v_s = metrics.get("valence_std", 0)
+        a_m = metrics.get("arousal_mean", 0)
+        a_s = metrics.get("arousal_std", 0)
+        val_str = f"{v_m:.1f} ± {v_s:.1f}"
+        aro_str = f"{a_m:.1f} ± {a_s:.1f}"
         print(f"{mod_key} & {val_str} & {aro_str} \\\\")
     print("\\bottomrule")
     print("\\end{tabular}")

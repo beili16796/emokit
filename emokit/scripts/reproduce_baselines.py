@@ -17,9 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
-from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -99,7 +97,10 @@ def check_baselines(
                 )
 
     if not dry_run and our_results is not None:
-        logger.info("\nSummary: %d/%d settings within ±%.1f%%", passed, total, TOLERANCE)
+        logger.info(
+            "\nSummary: %d/%d within ±%.1f%%",
+            passed, total, TOLERANCE,
+        )
 
     return verdicts
 
