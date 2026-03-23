@@ -1,0 +1,28 @@
+experiment:
+  name: default_experiment
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DEAP
+  root: data/DEAP
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: null
+  label_axis: valence
+
+feature_pipeline:
+  steps: []
+
+model:
+  name: DGCNN
+  params: {}
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/
+  save_checkpoints: false

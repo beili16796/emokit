@@ -1,0 +1,25 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Experiment outputs (paper pipeline)
+results/
+checkpoints/
+figures/
+*.pt
+*.pth
+
+# IDE / env
+.venv/
+.env
+.idea/
+.vscode/

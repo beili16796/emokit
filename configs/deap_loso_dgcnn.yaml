@@ -1,0 +1,41 @@
+experiment:
+  name: deap_loso_dgcnn
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DEAP
+  root: data/DEAP
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg, gsr]
+  label_axis: valence
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params:
+        fs: 128
+        bands: {delta: [1, 4], theta: [4, 8], alpha: [8, 13], beta: [13, 30], gamma: [30, 45]}
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: DGCNN
+  params:
+    n_channels: 32
+    n_bands: 5
+    hidden_dim: 64
+    lr: 0.001
+    batch_size: 64
+    n_epochs: 50
+    lambda_reg: 0.0001
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/
+  save_checkpoints: false

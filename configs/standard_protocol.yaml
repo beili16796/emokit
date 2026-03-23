@@ -1,0 +1,29 @@
+# Shared "frozen" protocol for all paper experiments — override only in model-specific YAMLs.
+# See docs/PAPER_ROADMAP.md (R2-1).
+
+version: 1
+
+preprocessing:
+  eeg_bandpass_hz: [1, 45]
+  eeg_filter_order: 5
+  downsample_hz: 128
+  baseline_drop_sec: 3.0
+  window_sec: 4.0
+  overlap: 0.5
+  feature: DE  # Differential Entropy
+
+training:
+  optimizer: Adam
+  lr: 0.001
+  batch_size: 64
+  max_epochs: 50
+  early_stopping:
+    patience: 10
+    monitor: val_acc
+    min_delta: 0.001
+  val_fraction: 0.1
+  seed: 42
+
+evaluation:
+  protocol: loso
+  random_seed: 42
