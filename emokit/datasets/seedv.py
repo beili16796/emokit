@@ -13,20 +13,74 @@ import numpy as np
 from scipy.io import loadmat
 from scipy.signal import butter, sosfiltfilt
 
-from emokit.datasets.base import BaseDataset, _REGISTRY
+from emokit.datasets.base import _REGISTRY, BaseDataset
 from emokit.utils import EmoKitDataError
 
 logger = logging.getLogger(__name__)
 
 _EEG_CHANNELS: list[str] = [
-    "Fp1", "Fpz", "Fp2", "AF3", "AF4",
-    "F7", "F5", "F3", "F1", "Fz", "F2", "F4", "F6", "F8",
-    "FT7", "FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6", "FT8",
-    "T7", "C5", "C3", "C1", "Cz", "C2", "C4", "C6", "T8",
-    "TP7", "CP5", "CP3", "CP1", "CPz", "CP2", "CP4", "CP6", "TP8",
-    "P7", "P5", "P3", "P1", "Pz", "P2", "P4", "P6", "P8",
-    "PO7", "PO5", "PO3", "POz", "PO4", "PO6", "PO8",
-    "CB1", "O1", "Oz", "O2", "CB2",
+    "Fp1",
+    "Fpz",
+    "Fp2",
+    "AF3",
+    "AF4",
+    "F7",
+    "F5",
+    "F3",
+    "F1",
+    "Fz",
+    "F2",
+    "F4",
+    "F6",
+    "F8",
+    "FT7",
+    "FC5",
+    "FC3",
+    "FC1",
+    "FCz",
+    "FC2",
+    "FC4",
+    "FC6",
+    "FT8",
+    "T7",
+    "C5",
+    "C3",
+    "C1",
+    "Cz",
+    "C2",
+    "C4",
+    "C6",
+    "T8",
+    "TP7",
+    "CP5",
+    "CP3",
+    "CP1",
+    "CPz",
+    "CP2",
+    "CP4",
+    "CP6",
+    "TP8",
+    "P7",
+    "P5",
+    "P3",
+    "P1",
+    "Pz",
+    "P2",
+    "P4",
+    "P6",
+    "P8",
+    "PO7",
+    "PO5",
+    "PO3",
+    "POz",
+    "PO4",
+    "PO6",
+    "PO8",
+    "CB1",
+    "O1",
+    "Oz",
+    "O2",
+    "CB2",
 ]
 
 _EOG_CHANNELS: list[str] = ["hEOG", "vEOG", "hEOG2"]
@@ -36,6 +90,9 @@ _EMOTION_LABELS: list[str] = ["happy", "sad", "neutral", "fear", "disgust"]
 _N_SUBJECTS: int = 16
 _N_SESSIONS: int = 3
 _FS: float = 200.0
+
+
+SEED_62_CHANNELS: list[str] = list(_EEG_CHANNELS)
 
 
 @_REGISTRY.register("SEED-V")
@@ -78,6 +135,12 @@ class SEEDVDataset(BaseDataset):
         )
         self.sessions = sessions or list(range(1, _N_SESSIONS + 1))
         self.use_de_features = use_de_features
+        self._pre_extracted: bool = use_de_features
+
+    @property
+    def is_pre_extracted(self) -> bool:
+        """Whether this dataset contains pre-extracted DE features."""
+        return self._pre_extracted
 
     def _get_fs(self) -> float:
         return _FS
@@ -151,7 +214,9 @@ class SEEDVDataset(BaseDataset):
         """
         mat = loadmat(str(mat_path), squeeze_me=True)
 
-        data_keys = [k for k in mat if not k.startswith("__") and k != "labels" and k != "label"]
+        data_keys = [
+            k for k in mat if not k.startswith("__") and k != "labels" and k != "label"
+        ]
         trials: list[np.ndarray] = []
         for key in sorted(data_keys):
             arr = np.asarray(mat[key], dtype=np.float64)
@@ -161,7 +226,6 @@ class SEEDVDataset(BaseDataset):
         if not trials:
             raise EmoKitDataError(f"No trial data found in {mat_path}")
 
-        max_ch = max(t.shape[0] for t in trials)
         n_eeg = 62
         n_eog = 3
         data_list: list[np.ndarray] = []
@@ -224,13 +288,15 @@ class SEEDVDataset(BaseDataset):
             else:
                 min_t = min(a.shape[2] for a in all_eeg)
                 result["eeg"] = np.concatenate(
-                    [a[:, :, :min_t] for a in all_eeg], axis=0,
+                    [a[:, :, :min_t] for a in all_eeg],
+                    axis=0,
                 )
 
         if all_eog:
             min_t = min(a.shape[2] for a in all_eog)
             result["eog"] = np.concatenate(
-                [a[:, :, :min_t] for a in all_eog], axis=0,
+                [a[:, :, :min_t] for a in all_eog],
+                axis=0,
             )
 
         result["labels"] = np.concatenate(all_labels, axis=0)

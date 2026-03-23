@@ -84,12 +84,14 @@ class DatasetRegistry(dict):
         Args:
             name: Canonical dataset identifier (e.g. ``'DEAP'``).
         """
+
         def decorator(cls: type) -> type:
             if name in self:
                 logger.warning("Overwriting registry entry '%s'", name)
             self[name] = cls
             logger.debug("Registered dataset '%s' -> %s", name, cls.__name__)
             return cls
+
         return decorator
 
     def available(self) -> list[str]:
@@ -193,9 +195,7 @@ class BaseDataset(ABC):
             logger.info("Loading subject %d …", sid)
             raw = self.read_raw(sid)
 
-            modalities = self.modalities or [
-                k for k in raw if k != "labels"
-            ]
+            modalities = self.modalities or [k for k in raw if k != "labels"]
             arrays = [raw[m] for m in modalities if m in raw and m != "labels"]
             if not arrays:
                 logger.warning("No matching modalities for subject %d, skipping", sid)
@@ -211,10 +211,12 @@ class BaseDataset(ABC):
                 )
 
             windows = segment_trials(
-                data, self._get_fs(), self.window_sec, self.overlap,
+                data,
+                self._get_fs(),
+                self.window_sec,
+                self.overlap,
             )
 
-            n_trials = data.shape[0]
             n_total = data.shape[2]
             win_samples = int(round(self.window_sec * self._get_fs()))
             step = max(1, int(round(win_samples * (1.0 - self.overlap))))

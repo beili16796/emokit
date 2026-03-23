@@ -20,7 +20,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 from emokit.datasets.base import BaseDataset
 from emokit.features.base import FeaturePipeline
-from emokit.models.base import BaseModel, build_model
+from emokit.models.base import build_model
 from emokit.utils import EmoKitConfigError, set_seed
 
 logger = logging.getLogger(__name__)
@@ -45,9 +45,7 @@ def compute_metrics(
     """
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "f1_macro": float(
-            f1_score(y_true, y_pred, average="macro", zero_division=0)
-        ),
+        "f1_macro": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
         "f1_weighted": float(
             f1_score(y_true, y_pred, average="weighted", zero_division=0)
         ),
@@ -123,19 +121,16 @@ class LOSOEvaluator:
         subject_data: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         for sid in subject_ids:
             raw = self.dataset.read_raw(sid)
-            modalities = self.dataset.modalities or [
-                k for k in raw if k != "labels"
-            ]
+            modalities = self.dataset.modalities or [k for k in raw if k != "labels"]
             arrays = [raw[m] for m in modalities if m in raw and m != "labels"]
             if not arrays:
                 logger.warning("No data for subject %d, skipping", sid)
                 continue
             X_subj = np.concatenate(arrays, axis=1)
-            if X_subj.ndim == 3:
-                X_subj = X_subj.reshape(X_subj.shape[0], -1)
             subject_data[sid] = (X_subj, raw["labels"])
 
         per_subject: dict[int, dict[str, Any]] = {}
+        per_subject_raw_preds: dict[int, dict[str, list]] = {}
 
         for test_sid in subject_data:
             logger.info("LOSO fold: test subject = %d", test_sid)
@@ -152,7 +147,8 @@ class LOSOEvaluator:
 
             if not train_Xs:
                 logger.warning(
-                    "No training data for fold test_subject=%d (only 1 subject?), skipping",
+                    "No training data for fold test_subject=%d "
+                    "(only 1 subject?), skipping",
                     test_sid,
                 )
                 continue
@@ -183,14 +179,26 @@ class LOSOEvaluator:
             else:
                 model.fit(X_tr, y_tr, X_val, y_val)
 
-            metrics = model.evaluate(X_test_feat, y_test)
+            y_pred = model.predict(X_test_feat)
+            metrics = compute_metrics(y_test, y_pred)
             per_subject[test_sid] = metrics
-            logger.info("Subject %d — acc=%.4f  f1=%.4f", test_sid, metrics["accuracy"], metrics["f1_macro"])
+            per_subject_raw_preds[test_sid] = {
+                "y_true": y_test.tolist(),
+                "y_pred": y_pred.tolist(),
+            }
+            logger.info(
+                "Subject %d — acc=%.4f  f1=%.4f",
+                test_sid,
+                metrics["accuracy"],
+                metrics["f1_macro"],
+            )
 
-        return _aggregate_results(
+        result = _aggregate_results(
             per_subject,
             config={
+                "dataset": type(self.dataset).__name__,
                 "dataset_name": type(self.dataset).__name__,
+                "model": self.model_name,
                 "model_name": self.model_name,
                 "feature_pipeline_str": str(
                     [(n, type(t).__name__) for n, t in self.feature_pipeline.steps]
@@ -199,6 +207,8 @@ class LOSOEvaluator:
                 "protocol": "loso",
             },
         )
+        result["per_subject_raw_preds"] = per_subject_raw_preds
+        return result
 
     @classmethod
     def run_from_yaml(cls, yaml_path: str) -> dict[str, Any]:
@@ -213,6 +223,22 @@ class LOSOEvaluator:
         from emokit.evaluation.config import ConfigLoader
 
         cfg = ConfigLoader.load(yaml_path)
+        return _run_from_full_config(cfg, protocol_cls=cls)
+
+    @classmethod
+    def run_from_config(cls, cfg: dict | Any) -> dict[str, Any]:
+        """Run LOSO evaluation from a config dict or FullConfig object.
+
+        Args:
+            cfg: Either a FullConfig pydantic object or a plain dict.
+
+        Returns:
+            Evaluation results dict.
+        """
+        if isinstance(cfg, dict):
+            from emokit.evaluation.config import FullConfig
+
+            cfg = FullConfig(**cfg)
         return _run_from_full_config(cfg, protocol_cls=cls)
 
 
@@ -264,17 +290,13 @@ class SubjectDependentEvaluator:
 
         for sid in subject_ids:
             raw = self.dataset.read_raw(sid)
-            modalities = self.dataset.modalities or [
-                k for k in raw if k != "labels"
-            ]
+            modalities = self.dataset.modalities or [k for k in raw if k != "labels"]
             arrays = [raw[m] for m in modalities if m in raw and m != "labels"]
             if not arrays:
                 logger.warning("No data for subject %d, skipping", sid)
                 continue
 
             X_all = np.concatenate(arrays, axis=1)
-            if X_all.ndim == 3:
-                X_all = X_all.reshape(X_all.shape[0], -1)
             y_all = raw["labels"]
 
             if len(y_all) < 4 or len(np.unique(y_all)) < 2:
@@ -301,7 +323,12 @@ class SubjectDependentEvaluator:
             model.fit(X_tr, y_tr, X_val, y_val)
             metrics = model.evaluate(X_test_feat, y_test)
             per_subject[sid] = metrics
-            logger.info("Subject %d — acc=%.4f  f1=%.4f", sid, metrics["accuracy"], metrics["f1_macro"])
+            logger.info(
+                "Subject %d — acc=%.4f  f1=%.4f",
+                sid,
+                metrics["accuracy"],
+                metrics["f1_macro"],
+            )
 
         return _aggregate_results(
             per_subject,
@@ -378,8 +405,7 @@ class SessionEvaluator:
 
         if len(sessions) < 2:
             raise EmoKitConfigError(
-                "SessionEvaluator requires at least 2 sessions, "
-                f"got {len(sessions)}"
+                "SessionEvaluator requires at least 2 sessions, " f"got {len(sessions)}"
             )
 
         train_sessions = sessions[:-1]
@@ -412,8 +438,6 @@ class SessionEvaluator:
                 if not arrays:
                     continue
                 X_s = np.concatenate(arrays, axis=1)
-                if X_s.ndim == 3:
-                    X_s = X_s.reshape(X_s.shape[0], -1)
                 y_s = raw["labels"]
 
                 if sess == test_session:
@@ -427,7 +451,10 @@ class SessionEvaluator:
                 self.dataset.sessions = original_sessions
 
             if not train_Xs or not test_Xs:
-                logger.warning("Insufficient session data for subject %d, skipping", sid)
+                logger.warning(
+                    "Insufficient session data for subject %d, skipping",
+                    sid,
+                )
                 continue
 
             X_train_raw = np.concatenate(train_Xs, axis=0)
@@ -447,7 +474,12 @@ class SessionEvaluator:
             model.fit(X_tr, y_tr, X_val, y_val)
             metrics = model.evaluate(X_test_feat, y_test)
             per_subject[sid] = metrics
-            logger.info("Subject %d — acc=%.4f  f1=%.4f", sid, metrics["accuracy"], metrics["f1_macro"])
+            logger.info(
+                "Subject %d — acc=%.4f  f1=%.4f",
+                sid,
+                metrics["accuracy"],
+                metrics["f1_macro"],
+            )
 
         return _aggregate_results(
             per_subject,
@@ -518,7 +550,8 @@ class ResultLogger:
 
         per_subject = results.get("per_subject", {})
         if per_subject:
-            fieldnames = ["subject_id", *sorted(next(iter(per_subject.values())).keys())]
+            first_metrics = next(iter(per_subject.values()))
+            fieldnames = ["subject_id", *sorted(first_metrics.keys())]
             with open(csv_path, "w", newline="", encoding="utf-8") as fh:
                 writer = csv.DictWriter(fh, fieldnames=fieldnames)
                 writer.writeheader()
@@ -567,7 +600,8 @@ def _aggregate_results(
     if not per_subject:
         return {"per_subject": {}, "mean": {}, "std": {}, "config": config}
 
-    metric_keys = [k for k in next(iter(per_subject.values())) if k != "confusion_matrix"]
+    first_subject_metrics = next(iter(per_subject.values()))
+    metric_keys = [k for k in first_subject_metrics if k != "confusion_matrix"]
     values = {k: [m[k] for m in per_subject.values()] for k in metric_keys}
 
     return {
@@ -596,6 +630,8 @@ def _run_from_full_config(cfg: Any, protocol_cls: type) -> dict[str, Any]:
         ds_kwargs["modalities"] = cfg.dataset.modalities
     if cfg.dataset.label_axis is not None:
         ds_kwargs["label_axis"] = cfg.dataset.label_axis
+    if hasattr(cfg.dataset, "params") and cfg.dataset.params:
+        ds_kwargs.update(cfg.dataset.params)
     dataset = load_dataset(cfg.dataset.name, **ds_kwargs)
 
     steps: list[tuple[str, Any]] = []

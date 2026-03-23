@@ -2,8 +2,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyPI version](https://img.shields.io/pypi/v/emokit.svg)](https://pypi.org/project/emokit/)
-[![Docs](https://readthedocs.org/projects/emokit/badge/?version=latest)](https://emokit.readthedocs.io)
 [![CI](https://github.com/emokit/emokit/actions/workflows/ci.yml/badge.svg)](https://github.com/emokit/emokit/actions)
 
 **Modular Physiological Signal Analysis & Benchmarking Toolkit** for EEG-based
@@ -11,47 +9,40 @@ emotion recognition research. EmoKit provides unified dataset loaders, feature
 extraction pipelines, deep-learning models, and reproducible evaluation
 protocols — all wired together through a single YAML config.
 
-> **论文级可复现性**：当前仓库提供接口与单元测试；真实数据集上的 LOSO 数字、统计检验与消融仍需按
-> [`docs/PAPER_ROADMAP.md`](docs/PAPER_ROADMAP.md) 推进（含 `scripts/verify_deap_pipeline.py` 等）。
-
 ---
+
+## Quickstart (< 60 seconds, no dataset required)
+
+```bash
+pip install -e ".[dev]"
+python -m emokit.run configs/quick_demo.yaml --dry-run
+# Expected: Mean accuracy ~0.50 (random, synthetic data)
+```
+
+## Run with real data (DEAP)
+
+```bash
+# After downloading DEAP preprocessed data:
+export EMOKIT_DATA_ROOT=/path/to/datasets
+python -m emokit.run configs/deap_loso_dgcnn.yaml
+```
+
+## Reproduce paper results
+
+```bash
+python -m emokit.scripts.reproduce_baselines \
+    --deap-root $EMOKIT_DATA_ROOT/DEAP \
+    --seedv-root $EMOKIT_DATA_ROOT/SEED-V
+```
 
 ## Installation
 
-**From PyPI:**
-
-```bash
-pip install emokit
-```
-
-**Editable install with dev dependencies (for contributors):**
+**From source (editable):**
 
 ```bash
 git clone https://github.com/emokit/emokit.git
 cd emokit
 pip install -e ".[dev]"
-```
-
-## Quickstart
-
-```python
-from emokit.datasets import load_dataset
-from emokit.features.eeg import DEExtractor, EEGNormalizer
-from emokit.features.base import FeaturePipeline
-from emokit.evaluation.protocols import LOSOEvaluator
-
-ds = load_dataset("DEAP", root="data/DEAP", modalities=["eeg"])
-pipeline = FeaturePipeline([
-    ("de", DEExtractor(fs=128)),
-    ("norm", EEGNormalizer()),
-])
-evaluator = LOSOEvaluator(
-    dataset=ds, feature_pipeline=pipeline,
-    model_config={"n_channels": 32, "n_bands": 5, "n_epochs": 50},
-    model_name="DGCNN", seed=42,
-)
-results = evaluator.run()
-print(f"Mean accuracy: {results['mean']['accuracy']:.4f}")
 ```
 
 ## YAML Configuration
@@ -97,29 +88,51 @@ output:
 Run it:
 
 ```bash
-python -m emokit --config configs/deap_loso_dgcnn.yaml
+python -m emokit.run configs/deap_loso_dgcnn.yaml
 ```
 
-## Supported Datasets
+## Supported datasets
 
-| Name       | Channels | Subjects | Classes | Modalities           |
-|------------|----------|----------|---------|----------------------|
-| DEAP       | 32       | 32       | 2       | EEG, GSR, ECG        |
-| SEED       | 62       | 15       | 3       | EEG                  |
-| SEED-V     | 62       | 16       | 5       | EEG, Eye tracking    |
-| MAHNOB-HCI | 32       | 27       | 2       | EEG, ECG, GSR, Video |
-| DREAMER    | 14       | 23       | 2       | EEG, ECG             |
+| Dataset    | Subjects | Modalities        | Labels     | Trials |
+|------------|----------|-------------------|------------|--------|
+| DEAP       | 32       | EEG+GSR+ECG+EMG   | V/A binary | 1,280  |
+| SEED-V     | 16       | EEG+EOG           | 5-class    | 3,000  |
+| SEED       | 15       | EEG               | 3-class    | 675    |
+| MAHNOB-HCI | 27       | EEG+ECG+GSR+video | V/A        | 527    |
+| DREAMER    | 23       | EEG+ECG           | V/A scale  | 414    |
 
-## Supported Models
+## Supported models
 
-| Name           | Paradigm        | Input Type   | Reference                               |
-|----------------|-----------------|--------------|---------------------------------------- |
-| CNN-LSTM       | Supervised      | Raw / DE     | Yang et al., 2018                       |
-| DGCNN          | Graph Neural    | DE           | Song et al., *IEEE TAFFC*, 2020         |
-| Transformer-MM | Multi-modal     | DE + Periph. | Tao et al., 2023                        |
-| BiDAE          | Semi-supervised | DE           | Li et al., *IEEE TAFFC*, 2022           |
-| DGCCA-AM       | Domain Adapt.   | DE           | Chen et al., 2023                       |
-| PR-PL          | Prompt Learning | DE           | Zhang et al., 2024                      |
+| Model         | Paradigm            | Ref        |
+|---------------|---------------------|------------|
+| CNN-LSTM      | Spatio-temporal     | Li 2016    |
+| BiDAE         | Multi-view fusion   | Zheng 2019 |
+| DGCNN         | Dynamic graph       | Song 2020  |
+| Transformer-MM| Attention-based     | Wu 2024    |
+| DGCCA-AM      | Adaptive fusion     | Lan 2020   |
+| PR-PL         | Prototypical align. | Zhou 2024  |
+
+## Python API
+
+```python
+from emokit.datasets import load_dataset
+from emokit.features.eeg import DEExtractor, EEGNormalizer
+from emokit.features.base import FeaturePipeline
+from emokit.evaluation.protocols import LOSOEvaluator
+
+ds = load_dataset("DEAP", root="data/DEAP", modalities=["eeg"])
+pipeline = FeaturePipeline([
+    ("de", DEExtractor(fs=128)),
+    ("norm", EEGNormalizer()),
+])
+evaluator = LOSOEvaluator(
+    dataset=ds, feature_pipeline=pipeline,
+    model_config={"n_channels": 32, "n_bands": 5, "n_epochs": 50},
+    model_name="DGCNN", seed=42,
+)
+results = evaluator.run()
+print(f"Mean accuracy: {results['mean']['accuracy']:.4f}")
+```
 
 ## Contributing
 

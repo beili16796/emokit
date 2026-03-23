@@ -7,9 +7,9 @@
 from __future__ import annotations
 
 from emokit.datasets.base import (
+    _REGISTRY,
     BaseDataset,
     DatasetRegistry,
-    _REGISTRY,
     load_dataset,
     segment_trials,
 )
@@ -21,6 +21,7 @@ from emokit.datasets.seedv import SEEDVDataset
 from emokit.datasets.synthetic import SyntheticDataset
 
 __all__ = [
+    "_REGISTRY",
     "BaseDataset",
     "DatasetRegistry",
     "DEAPDataset",

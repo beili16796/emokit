@@ -59,9 +59,7 @@ class DEExtractor(BaseTransform):
                 self.filter_order, [lo, hi], btype="bandpass", fs=self.fs, output="sos"
             )
 
-    def fit(
-        self, X: np.ndarray, y: np.ndarray | None = None
-    ) -> DEExtractor:
+    def fit(self, X: np.ndarray, y: np.ndarray | None = None) -> DEExtractor:
         """No-op; DE extraction is stateless.
 
         Args:
@@ -85,14 +83,12 @@ class DEExtractor(BaseTransform):
         Raises:
             ValueError: If *X* is not 3-D.
         """
-        assert X.ndim == 3, f"DEExtractor expects 3-D input (N,C,T), got {X.ndim}-D"
+        assert X.ndim == 3, f"Expected (N,C,T), got {X.shape}"
         n, c, _t = X.shape
         n_bands = len(self.bands)
         de = np.empty((n, c, n_bands), dtype=np.float32)
 
-        for b_idx, (band_name, sos) in enumerate(
-            zip(self.bands, self._sos.values())
-        ):
+        for b_idx, (band_name, sos) in enumerate(zip(self.bands, self._sos.values())):
             filtered = sosfiltfilt(sos, X, axis=-1)
             de[:, :, b_idx] = np.log(np.var(filtered, axis=-1) + 1e-8)
 
@@ -116,9 +112,7 @@ class BandpowerExtractor(BaseTransform):
         self.fs = fs
         self.bands = bands if bands is not None else dict(DEFAULT_BANDS)
 
-    def fit(
-        self, X: np.ndarray, y: np.ndarray | None = None
-    ) -> BandpowerExtractor:
+    def fit(self, X: np.ndarray, y: np.ndarray | None = None) -> BandpowerExtractor:
         """No-op; bandpower does not require fitting.
 
         Args:
@@ -142,9 +136,9 @@ class BandpowerExtractor(BaseTransform):
         Raises:
             ValueError: If *X* is not 3-D.
         """
-        assert X.ndim == 3, (
-            f"BandpowerExtractor expects 3-D input (N,C,T), got {X.ndim}-D"
-        )
+        assert (
+            X.ndim == 3
+        ), f"BandpowerExtractor expects 3-D input (N,C,T), got {X.ndim}-D"
 
         n, c, t = X.shape
         num_bands = len(self.bands)
@@ -178,9 +172,7 @@ class EEGNormalizer(BaseTransform):
         self._mean: np.ndarray | None = None
         self._std: np.ndarray | None = None
 
-    def fit(
-        self, X: np.ndarray, y: np.ndarray | None = None
-    ) -> EEGNormalizer:
+    def fit(self, X: np.ndarray, y: np.ndarray | None = None) -> EEGNormalizer:
         """Compute per-channel mean and std from training data.
 
         Args:
@@ -193,9 +185,7 @@ class EEGNormalizer(BaseTransform):
         Raises:
             ValueError: If *X* is not 3-D.
         """
-        assert X.ndim == 3, (
-            f"EEGNormalizer expects 3-D input, got {X.ndim}-D"
-        )
+        assert X.ndim == 3, f"EEGNormalizer expects 3-D input, got {X.ndim}-D"
         self._mean = np.mean(X, axis=0, keepdims=True)
         self._std = np.std(X, axis=0, keepdims=True)
         return self
@@ -217,7 +207,5 @@ class EEGNormalizer(BaseTransform):
             raise EmoKitFeatureError(
                 "EEGNormalizer has not been fitted. Call fit() first."
             )
-        assert X.ndim == 3, (
-            f"EEGNormalizer expects 3-D input, got {X.ndim}-D"
-        )
+        assert X.ndim == 3, f"EEGNormalizer expects 3-D input, got {X.ndim}-D"
         return (X - self._mean) / (self._std + self.eps)

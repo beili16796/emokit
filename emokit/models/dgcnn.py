@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -185,6 +184,11 @@ class DGCNNModel(BaseModel):
         self.seed = seed
         self._build()
 
+    @property
+    def A(self) -> nn.Parameter:
+        """Alias for the learnable adjacency parameter."""
+        return self.network.adjacency
+
     def _build(self) -> None:
         self.network = _DGCNN(
             n_classes=self.n_classes,
@@ -193,6 +197,12 @@ class DGCNNModel(BaseModel):
             hidden_dim=self.hidden_dim,
             K=self.K,
         ).to(self.device)
+
+    def configure_optimizer(self) -> torch.optim.Optimizer:
+        """Return Adam optimizer with L2 weight decay (lambda=1e-4)."""
+        return torch.optim.Adam(
+            self.network.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        )
 
     def fit(
         self,

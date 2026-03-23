@@ -10,18 +10,46 @@ import logging
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import butter, sosfiltfilt, resample_poly
+from scipy.signal import butter, resample_poly, sosfiltfilt
 
-from emokit.datasets.base import BaseDataset, _REGISTRY
+from emokit.datasets.base import _REGISTRY, BaseDataset
 from emokit.utils import EmoKitDataError
 
 logger = logging.getLogger(__name__)
 
 _EEG_CHANNELS: list[str] = [
-    "Fp1", "AF3", "F3", "F7", "FC5", "FC1", "C3", "T7",
-    "CP5", "CP1", "P3", "P7", "PO3", "O1", "Oz", "Pz",
-    "Fp2", "AF4", "F4", "F8", "FC6", "FC2", "C4", "T8",
-    "CP6", "CP2", "P4", "P8", "PO4", "O2", "Fz", "Cz",
+    "Fp1",
+    "AF3",
+    "F3",
+    "F7",
+    "FC5",
+    "FC1",
+    "C3",
+    "T7",
+    "CP5",
+    "CP1",
+    "P3",
+    "P7",
+    "PO3",
+    "O1",
+    "Oz",
+    "Pz",
+    "Fp2",
+    "AF4",
+    "F4",
+    "F8",
+    "FC6",
+    "FC2",
+    "C4",
+    "T8",
+    "CP6",
+    "CP2",
+    "P4",
+    "P8",
+    "PO4",
+    "O2",
+    "Fz",
+    "Cz",
 ]
 
 _ORIGINAL_FS: float = 256.0
@@ -102,8 +130,7 @@ class MAHNOBHCIDataset(BaseDataset):
                 f"under {self.root}"
             )
         sessions = sorted(
-            p for p in subject_dir.iterdir()
-            if p.is_dir() or p.suffix == ".bdf"
+            p for p in subject_dir.iterdir() if p.is_dir() or p.suffix == ".bdf"
         )
         return sessions
 
@@ -186,16 +213,12 @@ class MAHNOBHCIDataset(BaseDataset):
             if subject_labels is not None and idx < subject_labels.shape[0]:
                 col = 0 if self.label_axis == "valence" else 1
                 rating = float(subject_labels[idx, col])
-                all_labels.append(
-                    1 if rating >= self.label_threshold else 0
-                )
+                all_labels.append(1 if rating >= self.label_threshold else 0)
             else:
                 all_labels.append(0)
 
         if not all_eeg:
-            raise EmoKitDataError(
-                f"No data loaded for subject {subject_id}"
-            )
+            raise EmoKitDataError(f"No data loaded for subject {subject_id}")
 
         min_t = min(e.shape[1] for e in all_eeg)
         eeg_arr = np.stack([e[:, :min_t] for e in all_eeg], axis=0)
@@ -208,13 +231,15 @@ class MAHNOBHCIDataset(BaseDataset):
         if all_ecg:
             min_t_ecg = min(e.shape[1] for e in all_ecg)
             result["ecg"] = np.stack(
-                [e[:, :min_t_ecg] for e in all_ecg], axis=0,
+                [e[:, :min_t_ecg] for e in all_ecg],
+                axis=0,
             )
 
         if all_gsr:
             min_t_gsr = min(e.shape[1] for e in all_gsr)
             result["gsr"] = np.stack(
-                [e[:, :min_t_gsr] for e in all_gsr], axis=0,
+                [e[:, :min_t_gsr] for e in all_gsr],
+                axis=0,
             )
 
         return result

@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 
 from emokit.features.base import (
-    GLOBAL_REGISTRY,
     BaseTransform,
     FeaturePipeline,
     TransformRegistry,
@@ -22,7 +21,6 @@ from emokit.features.peripheral import (
     ModalityFusionTransform,
 )
 from emokit.utils import EmoKitFeatureError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -115,19 +113,23 @@ class TestTransformRegistry:
 
 class TestFeaturePipeline:
     def test_fit_transform_sequence(self) -> None:
-        pipe = FeaturePipeline([
-            ("scale", _ScaleTransform(factor=3.0)),
-            ("offset", _OffsetTransform(offset=10.0)),
-        ])
+        pipe = FeaturePipeline(
+            [
+                ("scale", _ScaleTransform(factor=3.0)),
+                ("offset", _OffsetTransform(offset=10.0)),
+            ]
+        )
         X = np.array([1.0, 2.0, 3.0])
         result = pipe.fit_transform(X)
         np.testing.assert_allclose(result, X * 3.0 + 10.0)
 
     def test_yaml_round_trip(self) -> None:
-        pipe = FeaturePipeline([
-            ("scale", _ScaleTransform(factor=5.0)),
-            ("offset", _OffsetTransform(offset=-1.0)),
-        ])
+        pipe = FeaturePipeline(
+            [
+                ("scale", _ScaleTransform(factor=5.0)),
+                ("offset", _OffsetTransform(offset=-1.0)),
+            ]
+        )
         yaml_str = pipe.to_yaml()
         assert "pipeline" in yaml_str
         assert "scale" in yaml_str
@@ -156,10 +158,12 @@ class TestFeaturePipeline:
 
     def test_duplicate_step_names_raises(self) -> None:
         with pytest.raises(EmoKitFeatureError, match="unique"):
-            FeaturePipeline([
-                ("same", _ScaleTransform()),
-                ("same", _OffsetTransform()),
-            ])
+            FeaturePipeline(
+                [
+                    ("same", _ScaleTransform()),
+                    ("same", _OffsetTransform()),
+                ]
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -183,12 +187,12 @@ class TestDEExtractor:
 
         de = DEExtractor(fs=fs).fit_transform(X)
         alpha_idx = 2  # delta, theta, alpha, beta, gamma
-        assert de[0, 0, alpha_idx] == de[0, 0, :].max(), (
-            f"Alpha DE should be max; got DE = {de[0, 0, :]}"
-        )
+        assert (
+            de[0, 0, alpha_idx] == de[0, 0, :].max()
+        ), f"Alpha DE should be max; got DE = {de[0, 0, :]}"
 
     def test_wrong_ndim_raises(self) -> None:
-        with pytest.raises(AssertionError, match="3-D"):
+        with pytest.raises(AssertionError, match="Expected \\(N,C,T\\)"):
             DEExtractor().transform(np.zeros((10, 5)))
 
     def test_single_sample(self) -> None:
@@ -351,3 +355,35 @@ class TestEdgeCases:
     def test_wrong_shape_normalizer_2d(self) -> None:
         with pytest.raises(AssertionError):
             EEGNormalizer().fit(np.zeros((10, 5)))
+
+
+# ---------------------------------------------------------------------------
+# Paper-aligned tests (P0-1)
+# ---------------------------------------------------------------------------
+
+
+def test_de_alpha_dominates_for_10hz_sine():
+    """Pure 10Hz sine -> alpha band DE must be strictly highest."""
+    fs, T = 128, 512
+    t = np.linspace(0, T / fs, T, endpoint=False)
+    sig = np.sin(2 * np.pi * 10 * t).astype(np.float32)
+    X = sig[np.newaxis, np.newaxis, :]  # (1, 1, 512)
+    de = DEExtractor(fs=fs).transform(X)  # (1, 1, 5)
+    assert de.shape == (1, 1, 5)
+    alpha_idx = 2
+    assert de[0, 0, alpha_idx] == de[0, 0].max(), f"Alpha not dominant: {de[0, 0]}"
+
+
+def test_de_output_dtype_and_shape():
+    X = np.random.randn(16, 32, 512).astype(np.float32)
+    de = DEExtractor(fs=128).transform(X)
+    assert de.shape == (16, 32, 5)
+    assert de.dtype == np.float32
+
+
+def test_de_stateless_no_fit_needed():
+    X = np.random.randn(4, 32, 512).astype(np.float32)
+    ext = DEExtractor(fs=128)
+    de1 = ext.transform(X)
+    de2 = ext.fit_transform(X)
+    np.testing.assert_array_equal(de1, de2)

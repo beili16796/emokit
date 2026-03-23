@@ -30,12 +30,13 @@ class DatasetConfig(BaseModel):
     """Dataset specification."""
 
     name: str
-    root: str = "data/"
+    root: str | None = "data/"
     subjects: list[int] | None = None
     window_sec: float | None = 4.0
     overlap: float | None = 0.5
     modalities: list[str] | None = None
     label_axis: str | None = None
+    params: dict[str, Any] | None = None
 
     @field_validator("overlap")
     @classmethod
@@ -76,9 +77,7 @@ class EvaluationConfig(BaseModel):
     def _check_protocol(cls, v: str) -> str:
         allowed = {"loso", "subject_dependent", "session"}
         if v not in allowed:
-            raise ValueError(
-                f"protocol must be one of {sorted(allowed)}, got '{v}'"
-            )
+            raise ValueError(f"protocol must be one of {sorted(allowed)}, got '{v}'")
         return v
 
     @field_validator("val_fraction")
