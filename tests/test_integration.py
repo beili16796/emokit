@@ -13,11 +13,11 @@ from typing import Any
 import numpy as np
 import pytest
 
-from emokit.datasets.base import BaseDataset, _REGISTRY
+from emokit.datasets.base import _REGISTRY, BaseDataset
 from emokit.evaluation.protocols import LOSOEvaluator
 from emokit.features.base import BaseTransform, FeaturePipeline
 from emokit.features.eeg import DEExtractor, EEGNormalizer
-from emokit.utils import EmoKitConfigError, set_seed
+from emokit.utils import set_seed
 
 N_SUBJECTS = 3
 N_TRIALS = 5
@@ -214,15 +214,28 @@ def test_all_models_predict_on_synthetic():
             model.fit(X[:20], y[:20])
             preds = model.predict(X[20:])
         elif name == "Transformer-MM":
-            data = {"eeg": X[:20], "peripheral": np.random.randn(20, 7).astype(np.float32)}
+            n_test = X[20:].shape[0]
+            data = {
+                "eeg": X[:20],
+                "peripheral": np.random.randn(20, 7).astype(np.float32),
+            }
             model.fit(data, y[:20])
-            data_test = {"eeg": X[20:], "peripheral": np.random.randn(X[20:].shape[0], 7).astype(np.float32)}
+            data_test = {
+                "eeg": X[20:],
+                "peripheral": np.random.randn(n_test, 7).astype(np.float32),
+            }
             preds = model.predict(data_test)
         elif name == "BiDAE":
-            data = {"mod1": X[:20].reshape(20, -1), "mod2": np.random.randn(20, 7).astype(np.float32)}
+            data = {
+                "mod1": X[:20].reshape(20, -1),
+                "mod2": np.random.randn(20, 7).astype(np.float32),
+            }
             model.fit(data, y[:20])
             n_test = X[20:].shape[0]
-            data_test = {"mod1": X[20:].reshape(n_test, -1), "mod2": np.random.randn(n_test, 7).astype(np.float32)}
+            data_test = {
+                "mod1": X[20:].reshape(n_test, -1),
+                "mod2": np.random.randn(n_test, 7).astype(np.float32),
+            }
             preds = model.predict(data_test)
         elif name == "DGCCA-AM":
             n_train = 20
@@ -250,7 +263,8 @@ def test_yaml_config_validation_rejects_bad_config(tmp_path):
 
     bad_yaml = tmp_path / "bad.yaml"
     bad_yaml.write_text(
-        "experiment:\n  name: x\ndataset:\n  name: DEAP\n  window_sec: 'not_a_number'\nmodel:\n  name: X\n"
+        "experiment:\n  name: x\ndataset:\n  name: DEAP\n"
+        "  window_sec: 'not_a_number'\nmodel:\n  name: X\n"
     )
     with pytest.raises(Exception):
         ConfigLoader.load(str(bad_yaml))
