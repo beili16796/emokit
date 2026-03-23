@@ -2,8 +2,8 @@
 # Copyright (c) 2024 EmoKit Contributors
 # See LICENSE for full text.
 
-"""Prototype-Representation / Pairwise-Loss (PR-PL) model for cross-subject EEG
-emotion recognition."""
+"""Prototype-Representation / Pairwise-Loss (PR-PL) model for cross-subject
+EEG emotion recognition."""
 
 from __future__ import annotations
 
@@ -66,17 +66,14 @@ class _PRPL(nn.Module):
             nn.ReLU(),
         )
 
-        self.register_buffer(
-            "prototypes", torch.randn(n_classes, prototype_dim) * 0.02
-        )
-        self.register_buffer(
-            "_proto_counts", torch.zeros(n_classes, dtype=torch.long)
-        )
+        self.register_buffer("prototypes", torch.randn(n_classes, prototype_dim) * 0.02)
+        self.register_buffer("_proto_counts", torch.zeros(n_classes, dtype=torch.long))
 
         self.classifier = nn.Linear(prototype_dim, n_classes)
 
         self.domain_disc = nn.Sequential(
-            nn.Linear(prototype_dim, 64), nn.ReLU(),
+            nn.Linear(prototype_dim, 64),
+            nn.ReLU(),
             nn.Linear(64, 2),
         )
 
@@ -106,10 +103,11 @@ class _PRPL(nn.Module):
                 if count == 0:
                     self.prototypes[c] = z_c
                 else:
-                    momentum = 1.0 / (count + 1)
-                    self.prototypes[c] = (
-                        (1 - momentum) * self.prototypes[c] + momentum * z_c
-                    )
+                    denom = count + 1
+                    momentum = 1.0 / denom
+                    self.prototypes[c] = (1 - momentum) * self.prototypes[
+                        c
+                    ] + momentum * z_c
                 self._proto_counts[c] += mask.sum()
 
     def pairwise_loss(
@@ -325,10 +323,10 @@ class PRPLModel(BaseModel):
 
                 if target_iter is not None:
                     try:
-                        (x_tgt_b,) = next(target_iter)
+                        x_tgt_b = next(target_iter)[0]
                     except StopIteration:
                         target_iter = iter(target_loader)
-                        (x_tgt_b,) = next(target_iter)
+                        x_tgt_b = next(target_iter)[0]
 
                     z_tgt = net.encode(x_tgt_b)
                     adv_progress = epoch / max(actual_epochs - 1, 1)
