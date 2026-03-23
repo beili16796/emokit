@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 
 from emokit.features.base import (
-    GLOBAL_REGISTRY,
     BaseTransform,
     FeaturePipeline,
     TransformRegistry,
@@ -22,7 +21,6 @@ from emokit.features.peripheral import (
     ModalityFusionTransform,
 )
 from emokit.utils import EmoKitFeatureError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -115,19 +113,23 @@ class TestTransformRegistry:
 
 class TestFeaturePipeline:
     def test_fit_transform_sequence(self) -> None:
-        pipe = FeaturePipeline([
-            ("scale", _ScaleTransform(factor=3.0)),
-            ("offset", _OffsetTransform(offset=10.0)),
-        ])
+        pipe = FeaturePipeline(
+            [
+                ("scale", _ScaleTransform(factor=3.0)),
+                ("offset", _OffsetTransform(offset=10.0)),
+            ]
+        )
         X = np.array([1.0, 2.0, 3.0])
         result = pipe.fit_transform(X)
         np.testing.assert_allclose(result, X * 3.0 + 10.0)
 
     def test_yaml_round_trip(self) -> None:
-        pipe = FeaturePipeline([
-            ("scale", _ScaleTransform(factor=5.0)),
-            ("offset", _OffsetTransform(offset=-1.0)),
-        ])
+        pipe = FeaturePipeline(
+            [
+                ("scale", _ScaleTransform(factor=5.0)),
+                ("offset", _OffsetTransform(offset=-1.0)),
+            ]
+        )
         yaml_str = pipe.to_yaml()
         assert "pipeline" in yaml_str
         assert "scale" in yaml_str
@@ -156,10 +158,12 @@ class TestFeaturePipeline:
 
     def test_duplicate_step_names_raises(self) -> None:
         with pytest.raises(EmoKitFeatureError, match="unique"):
-            FeaturePipeline([
-                ("same", _ScaleTransform()),
-                ("same", _OffsetTransform()),
-            ])
+            FeaturePipeline(
+                [
+                    ("same", _ScaleTransform()),
+                    ("same", _OffsetTransform()),
+                ]
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -183,9 +187,9 @@ class TestDEExtractor:
 
         de = DEExtractor(fs=fs).fit_transform(X)
         alpha_idx = 2  # delta, theta, alpha, beta, gamma
-        assert de[0, 0, alpha_idx] == de[0, 0, :].max(), (
-            f"Alpha DE should be max; got DE = {de[0, 0, :]}"
-        )
+        assert (
+            de[0, 0, alpha_idx] == de[0, 0, :].max()
+        ), f"Alpha DE should be max; got DE = {de[0, 0, :]}"
 
     def test_wrong_ndim_raises(self) -> None:
         with pytest.raises(AssertionError, match="Expected \\(N,C,T\\)"):
@@ -367,8 +371,7 @@ def test_de_alpha_dominates_for_10hz_sine():
     de = DEExtractor(fs=fs).transform(X)  # (1, 1, 5)
     assert de.shape == (1, 1, 5)
     alpha_idx = 2
-    assert de[0, 0, alpha_idx] == de[0, 0].max(), \
-        f"Alpha not dominant: {de[0, 0]}"
+    assert de[0, 0, alpha_idx] == de[0, 0].max(), f"Alpha not dominant: {de[0, 0]}"
 
 
 def test_de_output_dtype_and_shape():

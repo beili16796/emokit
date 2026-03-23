@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -271,9 +270,7 @@ class TransformerMMModel(BaseModel):
         return history
 
     @torch.no_grad()
-    def forward_features(
-        self, X: np.ndarray | dict[str, np.ndarray]
-    ) -> torch.Tensor:
+    def forward_features(self, X: np.ndarray | dict[str, np.ndarray]) -> torch.Tensor:
         """Return CLS embedding before the classification head.
 
         Args:
@@ -301,9 +298,7 @@ class TransformerMMModel(BaseModel):
         return self.network(eeg, periph).argmax(dim=-1).cpu().numpy()
 
     @torch.no_grad()
-    def predict_proba(
-        self, X: np.ndarray | dict[str, np.ndarray]
-    ) -> np.ndarray:
+    def predict_proba(self, X: np.ndarray | dict[str, np.ndarray]) -> np.ndarray:
         """Return softmax probabilities.
 
         Args:

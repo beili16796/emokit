@@ -102,10 +102,12 @@ def run_ablation(
             logger.warning("Skipping %s: %s", mod_name, e)
             continue
 
-        pipeline = FeaturePipeline([
-            ("de", DEExtractor(fs=128)),
-            ("norm", EEGNormalizer()),
-        ])
+        pipeline = FeaturePipeline(
+            [
+                ("de", DEExtractor(fs=128)),
+                ("norm", EEGNormalizer()),
+            ]
+        )
 
         evaluator = LOSOEvaluator(
             dataset=ds,
@@ -126,8 +128,10 @@ def run_ablation(
         except Exception as e:
             logger.warning("Failed %s: %s", mod_name, e)
             results[mod_name] = {
-                "valence_mean": 0.0, "valence_std": 0.0,
-                "arousal_mean": 0.0, "arousal_std": 0.0,
+                "valence_mean": 0.0,
+                "valence_std": 0.0,
+                "arousal_mean": 0.0,
+                "arousal_std": 0.0,
             }
 
     out_path = Path(output)

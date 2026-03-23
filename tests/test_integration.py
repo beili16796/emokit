@@ -58,6 +58,7 @@ class _FlattenTo2D(BaseTransform):
 
 
 if "MockDEAP" not in _REGISTRY:
+
     @_REGISTRY.register("MockDEAP")
     class MockDEAPDataset(BaseDataset):
         """Synthetic DEAP-like dataset for integration testing."""
@@ -88,6 +89,7 @@ if "MockDEAP" not in _REGISTRY:
 
         def _get_fs(self) -> float:
             return float(FS)
+
 else:
     MockDEAPDataset = _REGISTRY["MockDEAP"]
 
@@ -99,11 +101,13 @@ class TestIntegration:
         set_seed(SEED)
         ds = MockDEAPDataset()
 
-        pipeline = FeaturePipeline([
-            ("de", DEExtractor(fs=FS)),
-            ("norm", EEGNormalizer()),
-            ("flatten", _FlattenTo2D()),
-        ])
+        pipeline = FeaturePipeline(
+            [
+                ("de", DEExtractor(fs=FS)),
+                ("norm", EEGNormalizer()),
+                ("flatten", _FlattenTo2D()),
+            ]
+        )
 
         model_config: dict[str, Any] = {
             "n_classes": N_CLASSES,
@@ -155,9 +159,10 @@ class TestIntegration:
 def test_quick_demo_end_to_end():
     """The README quickstart must work exactly as written."""
     result = subprocess.run(
-        [sys.executable, "-m", "emokit.run",
-         "configs/quick_demo.yaml", "--dry-run"],
-        capture_output=True, text=True, timeout=120,
+        [sys.executable, "-m", "emokit.run", "configs/quick_demo.yaml", "--dry-run"],
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     assert result.returncode == 0, f"Exit {result.returncode}:\n{result.stderr}"
     out = result.stdout.lower() + result.stderr.lower()
@@ -172,10 +177,11 @@ def test_all_models_predict_on_synthetic():
     ds = SyntheticDataset(n_subjects=3, n_trials=10, n_classes=2, seed=0)
     de = DEExtractor(fs=128)
 
-    for name in ["CNN-LSTM", "DGCNN", "Transformer-MM",
-                 "BiDAE", "DGCCA-AM", "PR-PL"]:
+    for name in ["CNN-LSTM", "DGCNN", "Transformer-MM", "BiDAE", "DGCCA-AM", "PR-PL"]:
         model_kwargs: dict[str, Any] = {
-            "n_classes": 2, "n_epochs": 1, "batch_size": 8,
+            "n_classes": 2,
+            "n_epochs": 1,
+            "batch_size": 8,
         }
 
         if name == "CNN-LSTM":
@@ -183,15 +189,23 @@ def test_all_models_predict_on_synthetic():
         elif name == "DGCNN":
             model_kwargs.update({"n_channels": 32, "n_bands": 5})
         elif name == "Transformer-MM":
-            model_kwargs.update({
-                "n_channels": 32, "n_bands": 5, "n_peripheral_feat": 7,
-            })
+            model_kwargs.update(
+                {
+                    "n_channels": 32,
+                    "n_bands": 5,
+                    "n_peripheral_feat": 7,
+                }
+            )
         elif name == "BiDAE":
             model_kwargs.update({"n_feat_mod1": 160, "n_feat_mod2": 7})
         elif name == "DGCCA-AM":
-            model_kwargs.update({
-                "n_feat_eeg": 160, "n_feat_gsr": 32, "n_feat_ecg": 16,
-            })
+            model_kwargs.update(
+                {
+                    "n_feat_eeg": 160,
+                    "n_feat_gsr": 32,
+                    "n_feat_ecg": 16,
+                }
+            )
         elif name == "PR-PL":
             model_kwargs.update({"n_feat": 160, "prototype_dim": 64})
 

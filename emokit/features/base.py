@@ -50,9 +50,7 @@ class TransformRegistry:
 
         def decorator(cls: type[BaseTransform]) -> type[BaseTransform]:
             if name in self._registry:
-                raise EmoKitFeatureError(
-                    f"Transform '{name}' is already registered."
-                )
+                raise EmoKitFeatureError(f"Transform '{name}' is already registered.")
             self._registry[name] = cls
             logger.debug("Registered transform '%s' -> %s", name, cls.__name__)
             return cls
@@ -119,9 +117,7 @@ class BaseTransform(ABC):
             Transformed array.
         """
 
-    def fit_transform(
-        self, X: np.ndarray, y: np.ndarray | None = None
-    ) -> np.ndarray:
+    def fit_transform(self, X: np.ndarray, y: np.ndarray | None = None) -> np.ndarray:
         """Fit and then transform *X*.
 
         Args:
@@ -150,9 +146,7 @@ class FeaturePipeline:
             raise EmoKitFeatureError("Pipeline step names must be unique.")
         self.steps = steps
 
-    def fit(
-        self, X: np.ndarray, y: np.ndarray | None = None
-    ) -> FeaturePipeline:
+    def fit(self, X: np.ndarray, y: np.ndarray | None = None) -> FeaturePipeline:
         """Fit each step sequentially, passing transformed output forward.
 
         Args:
@@ -181,9 +175,7 @@ class FeaturePipeline:
             X = step.transform(X)
         return X
 
-    def fit_transform(
-        self, X: np.ndarray, y: np.ndarray | None = None
-    ) -> np.ndarray:
+    def fit_transform(self, X: np.ndarray, y: np.ndarray | None = None) -> np.ndarray:
         """Fit the pipeline and return the final transformed output.
 
         Args:
@@ -210,11 +202,7 @@ class FeaturePipeline:
                 "name": name,
                 "transform": type(step).__name__,
             }
-            params = {
-                k: v
-                for k, v in step.__dict__.items()
-                if not k.startswith("_")
-            }
+            params = {k: v for k, v in step.__dict__.items() if not k.startswith("_")}
             if params:
                 entry["params"] = _convert_numpy(params)
             config.append(entry)
@@ -240,9 +228,7 @@ class FeaturePipeline:
             raise EmoKitFeatureError(f"Invalid YAML: {exc}") from exc
 
         if not isinstance(data, dict) or "pipeline" not in data:
-            raise EmoKitFeatureError(
-                "YAML must contain a top-level 'pipeline' key."
-            )
+            raise EmoKitFeatureError("YAML must contain a top-level 'pipeline' key.")
         return cls.from_config(data)
 
     @classmethod
@@ -263,9 +249,7 @@ class FeaturePipeline:
             EmoKitFeatureError: On invalid config or unknown transform name.
         """
         if "pipeline" not in config_dict:
-            raise EmoKitFeatureError(
-                "Config dict must contain a 'pipeline' key."
-            )
+            raise EmoKitFeatureError("Config dict must contain a 'pipeline' key.")
 
         steps: list[tuple[str, BaseTransform]] = []
         for entry in config_dict["pipeline"]:

@@ -77,9 +77,7 @@ class EvaluationConfig(BaseModel):
     def _check_protocol(cls, v: str) -> str:
         allowed = {"loso", "subject_dependent", "session"}
         if v not in allowed:
-            raise ValueError(
-                f"protocol must be one of {sorted(allowed)}, got '{v}'"
-            )
+            raise ValueError(f"protocol must be one of {sorted(allowed)}, got '{v}'")
         return v
 
     @field_validator("val_fraction")

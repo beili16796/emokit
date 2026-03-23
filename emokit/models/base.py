@@ -260,7 +260,8 @@ class EarlyStopping:
 
 
 class StandardTrainer:
-    """Wraps a PyTorch training loop with LR scheduling, gradient clipping, and early stopping.
+    """Wraps a PyTorch training loop with LR scheduling, gradient clipping,
+    and early stopping.
 
     Args:
         n_epochs: Maximum training epochs.

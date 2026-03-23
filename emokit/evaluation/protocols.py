@@ -45,9 +45,7 @@ def compute_metrics(
     """
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "f1_macro": float(
-            f1_score(y_true, y_pred, average="macro", zero_division=0)
-        ),
+        "f1_macro": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
         "f1_weighted": float(
             f1_score(y_true, y_pred, average="weighted", zero_division=0)
         ),
@@ -123,9 +121,7 @@ class LOSOEvaluator:
         subject_data: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         for sid in subject_ids:
             raw = self.dataset.read_raw(sid)
-            modalities = self.dataset.modalities or [
-                k for k in raw if k != "labels"
-            ]
+            modalities = self.dataset.modalities or [k for k in raw if k != "labels"]
             arrays = [raw[m] for m in modalities if m in raw and m != "labels"]
             if not arrays:
                 logger.warning("No data for subject %d, skipping", sid)
@@ -192,7 +188,9 @@ class LOSOEvaluator:
             }
             logger.info(
                 "Subject %d — acc=%.4f  f1=%.4f",
-                test_sid, metrics["accuracy"], metrics["f1_macro"],
+                test_sid,
+                metrics["accuracy"],
+                metrics["f1_macro"],
             )
 
         result = _aggregate_results(
@@ -239,6 +237,7 @@ class LOSOEvaluator:
         """
         if isinstance(cfg, dict):
             from emokit.evaluation.config import FullConfig
+
             cfg = FullConfig(**cfg)
         return _run_from_full_config(cfg, protocol_cls=cls)
 
@@ -291,9 +290,7 @@ class SubjectDependentEvaluator:
 
         for sid in subject_ids:
             raw = self.dataset.read_raw(sid)
-            modalities = self.dataset.modalities or [
-                k for k in raw if k != "labels"
-            ]
+            modalities = self.dataset.modalities or [k for k in raw if k != "labels"]
             arrays = [raw[m] for m in modalities if m in raw and m != "labels"]
             if not arrays:
                 logger.warning("No data for subject %d, skipping", sid)
@@ -328,7 +325,9 @@ class SubjectDependentEvaluator:
             per_subject[sid] = metrics
             logger.info(
                 "Subject %d — acc=%.4f  f1=%.4f",
-                sid, metrics["accuracy"], metrics["f1_macro"],
+                sid,
+                metrics["accuracy"],
+                metrics["f1_macro"],
             )
 
         return _aggregate_results(
@@ -406,8 +405,7 @@ class SessionEvaluator:
 
         if len(sessions) < 2:
             raise EmoKitConfigError(
-                "SessionEvaluator requires at least 2 sessions, "
-                f"got {len(sessions)}"
+                "SessionEvaluator requires at least 2 sessions, " f"got {len(sessions)}"
             )
 
         train_sessions = sessions[:-1]
@@ -478,7 +476,9 @@ class SessionEvaluator:
             per_subject[sid] = metrics
             logger.info(
                 "Subject %d — acc=%.4f  f1=%.4f",
-                sid, metrics["accuracy"], metrics["f1_macro"],
+                sid,
+                metrics["accuracy"],
+                metrics["f1_macro"],
             )
 
         return _aggregate_results(

@@ -11,22 +11,57 @@ import pickle
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import butter, sosfiltfilt, resample_poly
+from scipy.signal import butter, resample_poly, sosfiltfilt
 
-from emokit.datasets.base import BaseDataset, _REGISTRY, segment_trials
+from emokit.datasets.base import _REGISTRY, BaseDataset
 from emokit.utils import EmoKitDataError
 
 logger = logging.getLogger(__name__)
 
 _EEG_CHANNELS: list[str] = [
-    "Fp1", "AF3", "F3", "F7", "FC5", "FC1", "C3", "T7",
-    "CP5", "CP1", "P3", "P7", "PO3", "O1", "Oz", "Pz",
-    "Fp2", "AF4", "F4", "F8", "FC6", "FC2", "C4", "T8",
-    "CP6", "CP2", "P4", "P8", "PO4", "O2", "Fz", "Cz",
+    "Fp1",
+    "AF3",
+    "F3",
+    "F7",
+    "FC5",
+    "FC1",
+    "C3",
+    "T7",
+    "CP5",
+    "CP1",
+    "P3",
+    "P7",
+    "PO3",
+    "O1",
+    "Oz",
+    "Pz",
+    "Fp2",
+    "AF4",
+    "F4",
+    "F8",
+    "FC6",
+    "FC2",
+    "C4",
+    "T8",
+    "CP6",
+    "CP2",
+    "P4",
+    "P8",
+    "PO4",
+    "O2",
+    "Fz",
+    "Cz",
 ]
 
 _PERIPHERAL_CHANNELS: list[str] = [
-    "hEOG", "vEOG", "zEMG", "tEMG", "GSR", "Resp", "Temp", "Status",
+    "hEOG",
+    "vEOG",
+    "zEMG",
+    "tEMG",
+    "GSR",
+    "Resp",
+    "Temp",
+    "Status",
 ]
 
 _ORIGINAL_FS: float = 512.0
@@ -129,8 +164,13 @@ class DEAPDataset(BaseDataset):
         raw = mne.io.read_raw_bdf(str(path), preload=True, verbose=False)
         raw.pick_channels(_EEG_CHANNELS, ordered=True)
 
-        raw.filter(1.0, 45.0, method="iir", iir_params=dict(order=5, ftype="butter"),
-                   verbose=False)
+        raw.filter(
+            1.0,
+            45.0,
+            method="iir",
+            iir_params=dict(order=5, ftype="butter"),
+            verbose=False,
+        )
         raw.set_eeg_reference("average", verbose=False)
 
         sfreq = raw.info["sfreq"]

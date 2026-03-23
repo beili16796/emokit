@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 from typing import Any
 
 from emokit.evaluation.config import ConfigLoader, FullConfig
@@ -29,7 +28,9 @@ _PROTOCOL_MAP: dict[str, type] = {
 }
 
 
-def _build_evaluator(cfg: FullConfig) -> LOSOEvaluator | SubjectDependentEvaluator | SessionEvaluator:
+def _build_evaluator(
+    cfg: FullConfig,
+) -> LOSOEvaluator | SubjectDependentEvaluator | SessionEvaluator:
     """Instantiate dataset, feature pipeline, and the correct evaluator."""
     from emokit.datasets import load_dataset
     from emokit.features.base import GLOBAL_REGISTRY as TRANSFORM_REGISTRY
@@ -147,9 +148,7 @@ def main() -> None:
     if args.output_dir:
         cfg = cfg.model_copy(
             update={
-                "output": cfg.output.model_copy(
-                    update={"results_dir": args.output_dir}
-                )
+                "output": cfg.output.model_copy(update={"results_dir": args.output_dir})
             }
         )
 

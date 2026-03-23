@@ -113,7 +113,12 @@ def run_pairwise_wilcoxon(
 
         logger.info(
             "  %s | W=%.1f | p=%.6f | p_corr=%.6f | d=%.3f | %s",
-            key, w_stat, p_val, p_corr, d, sig_marker(p_corr),
+            key,
+            w_stat,
+            p_val,
+            p_corr,
+            d,
+            sig_marker(p_corr),
         )
 
     return results
@@ -138,7 +143,9 @@ def main() -> None:
     n_sig = sum(1 for r in results.values() if r["significant"] != "ns")
     logger.info(
         "%d / %d significant at α=%.4f (Bonferroni)",
-        n_sig, len(results), args.alpha,
+        n_sig,
+        len(results),
+        args.alpha,
     )
 
 

@@ -52,8 +52,7 @@ class ResultLogger:
         mean = results.get("mean", {})
         std = results.get("std", {})
         rows = [
-            {"metric": k, "mean": v, "std": std.get(k, "")}
-            for k, v in mean.items()
+            {"metric": k, "mean": v, "std": std.get(k, "")} for k, v in mean.items()
         ]
         pd.DataFrame(rows).to_csv(csv_path, index=False)
         logger.info("Results saved: %s, %s", json_path, csv_path)

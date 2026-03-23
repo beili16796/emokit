@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -28,10 +29,38 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 DEAP_CHANNEL_NAMES: list[str] = [
-    "Fp1", "AF3", "F3", "F7", "FC5", "FC1", "C3", "T7",
-    "CP5", "CP1", "P3", "P7", "PO3", "O1", "Oz", "Pz",
-    "Fp2", "AF4", "F4", "F8", "FC6", "FC2", "C4", "T8",
-    "CP6", "CP2", "P4", "P8", "PO4", "O2", "Fz", "Cz",
+    "Fp1",
+    "AF3",
+    "F3",
+    "F7",
+    "FC5",
+    "FC1",
+    "C3",
+    "T7",
+    "CP5",
+    "CP1",
+    "P3",
+    "P7",
+    "PO3",
+    "O1",
+    "Oz",
+    "Pz",
+    "Fp2",
+    "AF4",
+    "F4",
+    "F8",
+    "FC6",
+    "FC2",
+    "C4",
+    "T8",
+    "CP6",
+    "CP2",
+    "P4",
+    "P8",
+    "PO4",
+    "O2",
+    "Fz",
+    "Cz",
 ]
 
 
@@ -71,14 +100,17 @@ def plot_adjacency_topomap(
         ch_idx = channel_names.index(ch_name)
         values = A[ch_idx]
         mne.viz.plot_topomap(
-            values, info, axes=ax, cmap="RdBu_r",
-            show=False, sensors=True, contours=4,
+            values,
+            info,
+            axes=ax,
+            cmap="RdBu_r",
+            show=False,
+            sensors=True,
+            contours=4,
         )
         ax.set_title(f"From {ch_name}", fontsize=10)
 
-    fig.suptitle(
-        "DGCNN Learned Electrode Connectivity (A matrix rows)", fontsize=12
-    )
+    fig.suptitle("DGCNN Learned Electrode Connectivity (A matrix rows)", fontsize=12)
     fig.tight_layout()
     fig.savefig(str(output_path), dpi=200, bbox_inches="tight")
     logger.info("Saved: %s", output_path)

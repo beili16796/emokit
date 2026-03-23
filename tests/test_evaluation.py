@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 # Mock dataset: 5 subjects, 20 trials each, 2 classes, 10-feature vectors
 # ---------------------------------------------------------------------------
 
+
 class SyntheticDataset(BaseDataset):
     """Tiny synthetic dataset for testing evaluation protocols."""
 
@@ -91,6 +92,7 @@ class SyntheticDataset(BaseDataset):
 # Sklearn LogisticRegression wrapped as BaseModel
 # ---------------------------------------------------------------------------
 
+
 @registry.register("_TestLogReg")
 class LogRegModel(BaseModel):
     """Logistic regression wrapper for testing."""
@@ -128,6 +130,7 @@ class LogRegModel(BaseModel):
 # ---------------------------------------------------------------------------
 # Identity transform for pipeline
 # ---------------------------------------------------------------------------
+
 
 class IdentityTransform(BaseTransform):
     """Pass-through transform."""
@@ -534,6 +537,7 @@ class TestEdgeCases:
 
     def test_reproducibility(self) -> None:
         """Two runs with the same seed must yield identical results."""
+
         def _run(seed: int) -> dict[str, Any]:
             ds = SyntheticDataset(n_subjects=3, n_trials_per_subject=20, seed=seed)
             pipeline = FeaturePipeline([("id", IdentityTransform())])

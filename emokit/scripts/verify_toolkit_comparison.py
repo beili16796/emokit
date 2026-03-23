@@ -23,7 +23,7 @@ CLAIMS_TO_VERIFY: dict[str, dict[str, Any]] = {
     "MNE-Python": {
         "has_deep_learning": False,
         "evidence": "MNE has no nn.Module or torch dependency in its API",
-        "verify_cmd": 'python -c "import mne; print(hasattr(mne, \'torch\'))"',
+        "verify_cmd": "python -c \"import mne; print(hasattr(mne, 'torch'))\"",
     },
     "TorchEEG": {
         "LOSO_built_in": False,

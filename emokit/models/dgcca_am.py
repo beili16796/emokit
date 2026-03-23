@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -70,7 +69,9 @@ class _DGCCAAM(nn.Module):
 
         self.classifier = nn.Linear(hidden_dim, n_classes)
 
-    def _attention(self, hiddens: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+    def _attention(
+        self, hiddens: list[torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute attention-weighted sum of modality embeddings.
 
         Args:

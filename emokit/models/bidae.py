@@ -2,12 +2,12 @@
 # Copyright (c) 2024 EmoKit Contributors
 # See LICENSE for full text.
 
-"""Bi-modal Denoising Autoencoder (BiDAE) with shared bottleneck for emotion recognition."""
+"""Bi-modal Denoising Autoencoder (BiDAE) with shared bottleneck for emotion
+recognition."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -61,13 +61,17 @@ class _BiDAE(nn.Module):
         self.encoder1 = _MLP([n_feat1, 512, 256, bottleneck_dim])
         self.decoder1 = _MLP([bottleneck_dim, 256, 512, n_feat1])
         self.encoder2 = nn.Sequential(
-            nn.Linear(n_feat2, 64), nn.ReLU(),
-            nn.Linear(64, 128), nn.ReLU(),
+            nn.Linear(n_feat2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 128),
+            nn.ReLU(),
             nn.Linear(128, bottleneck_dim),
         )
         self.decoder2 = nn.Sequential(
-            nn.Linear(bottleneck_dim, 128), nn.ReLU(),
-            nn.Linear(128, 64), nn.ReLU(),
+            nn.Linear(bottleneck_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
             nn.Linear(64, n_feat2),
         )
         self.classifier = nn.Linear(bottleneck_dim, n_classes)
@@ -241,7 +245,8 @@ class BiDAEModel(BaseModel):
                 logits, z1, z2, x1_recon, x2_recon = net(x1b, x2b)
                 loss = (
                     ce_loss(logits, yb)
-                    + self.lambda_recon * (mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b))
+                    + self.lambda_recon
+                    * (mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b))
                     + self.mu_align * mse_loss(z1, z2)
                 )
                 loss.backward()

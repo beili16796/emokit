@@ -24,22 +24,34 @@ logger = logging.getLogger(__name__)
 
 PAPER_NUMBERS: dict[str, dict[str, float]] = {
     "CNN-LSTM": {
-        "DEAP_valence": 67.4, "DEAP_arousal": 69.2, "SEEDV_5class": 54.7,
+        "DEAP_valence": 67.4,
+        "DEAP_arousal": 69.2,
+        "SEEDV_5class": 54.7,
     },
     "BiDAE": {
-        "DEAP_valence": 71.2, "DEAP_arousal": 73.6, "SEEDV_5class": 57.3,
+        "DEAP_valence": 71.2,
+        "DEAP_arousal": 73.6,
+        "SEEDV_5class": 57.3,
     },
     "DGCNN": {
-        "DEAP_valence": 73.1, "DEAP_arousal": 72.5, "SEEDV_5class": 58.1,
+        "DEAP_valence": 73.1,
+        "DEAP_arousal": 72.5,
+        "SEEDV_5class": 58.1,
     },
     "Transformer-MM": {
-        "DEAP_valence": 70.9, "DEAP_arousal": 72.1, "SEEDV_5class": 62.3,
+        "DEAP_valence": 70.9,
+        "DEAP_arousal": 72.1,
+        "SEEDV_5class": 62.3,
     },
     "DGCCA-AM": {
-        "DEAP_valence": 71.5, "DEAP_arousal": 74.1, "SEEDV_5class": 60.5,
+        "DEAP_valence": 71.5,
+        "DEAP_arousal": 74.1,
+        "SEEDV_5class": 60.5,
     },
     "PR-PL": {
-        "DEAP_valence": 73.0, "DEAP_arousal": 75.4, "SEEDV_5class": 61.4,
+        "DEAP_valence": 73.0,
+        "DEAP_arousal": 75.4,
+        "SEEDV_5class": 61.4,
     },
 }
 
@@ -70,7 +82,8 @@ def check_baselines(
             if dry_run or our_results is None:
                 logger.info(
                     "  [DRY-RUN] %s: paper=%.1f (would compare with real data)",
-                    key, paper_val,
+                    key,
+                    paper_val,
                 )
                 verdicts[key] = "DRY-RUN"
                 continue
@@ -87,19 +100,28 @@ def check_baselines(
                 passed += 1
                 logger.info(
                     "  [PASS] %s: ours=%.1f paper=%.1f Δ=%.1f",
-                    key, ours, paper_val, delta,
+                    key,
+                    ours,
+                    paper_val,
+                    delta,
                 )
             else:
                 verdicts[key] = f"FAIL (delta={delta:.1f}%)"
                 logger.info(
                     "  [FAIL] %s: ours=%.1f paper=%.1f Δ=%.1f (>±%.1f%%)",
-                    key, ours, paper_val, delta, TOLERANCE,
+                    key,
+                    ours,
+                    paper_val,
+                    delta,
+                    TOLERANCE,
                 )
 
     if not dry_run and our_results is not None:
         logger.info(
             "\nSummary: %d/%d within ±%.1f%%",
-            passed, total, TOLERANCE,
+            passed,
+            total,
+            TOLERANCE,
         )
 
     return verdicts
@@ -107,12 +129,16 @@ def check_baselines(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Validate script structure with synthetic data.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate script structure with synthetic data.",
+    )
     parser.add_argument("--deap-root", type=str, default=None)
     parser.add_argument("--seedv-root", type=str, default=None)
-    parser.add_argument("--results-json", type=str, default=None,
-                        help="Pre-computed results JSON.")
+    parser.add_argument(
+        "--results-json", type=str, default=None, help="Pre-computed results JSON."
+    )
     args = parser.parse_args()
 
     our_results = None

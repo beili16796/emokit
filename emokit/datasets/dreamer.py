@@ -7,19 +7,30 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import numpy as np
 from scipy.io import loadmat
 
-from emokit.datasets.base import BaseDataset, _REGISTRY
+from emokit.datasets.base import _REGISTRY, BaseDataset
 from emokit.utils import EmoKitDataError
 
 logger = logging.getLogger(__name__)
 
 _EEG_CHANNELS: list[str] = [
-    "AF3", "F7", "F3", "FC5", "T7", "P7", "O1",
-    "O2", "P8", "T8", "FC6", "F4", "F8", "AF4",
+    "AF3",
+    "F7",
+    "F3",
+    "FC5",
+    "T7",
+    "P7",
+    "O1",
+    "O2",
+    "P8",
+    "T8",
+    "FC6",
+    "F4",
+    "F8",
+    "AF4",
 ]
 
 _ECG_CHANNELS: list[str] = ["ECG1", "ECG2"]
@@ -110,9 +121,7 @@ class DREAMERDataset(BaseDataset):
         try:
             dreamer_data = mat["DREAMER"].Data
         except (KeyError, AttributeError) as exc:
-            raise EmoKitDataError(
-                f"Unexpected DREAMER.mat structure: {exc}"
-            ) from exc
+            raise EmoKitDataError(f"Unexpected DREAMER.mat structure: {exc}") from exc
 
         if subject_id < 1 or subject_id > len(dreamer_data):
             raise EmoKitDataError(
@@ -128,15 +137,19 @@ class DREAMERDataset(BaseDataset):
         for vid_idx in range(_N_VIDEOS):
             try:
                 eeg_stim = np.asarray(
-                    subj.EEG.stimuli[vid_idx], dtype=np.float64,
+                    subj.EEG.stimuli[vid_idx],
+                    dtype=np.float64,
                 )
                 ecg_stim = np.asarray(
-                    subj.ECG.stimuli[vid_idx], dtype=np.float64,
+                    subj.ECG.stimuli[vid_idx],
+                    dtype=np.float64,
                 )
             except (AttributeError, IndexError) as exc:
                 logger.warning(
                     "Skipping video %d for subject %d: %s",
-                    vid_idx + 1, subject_id, exc,
+                    vid_idx + 1,
+                    subject_id,
+                    exc,
                 )
                 continue
 
@@ -154,21 +167,13 @@ class DREAMERDataset(BaseDataset):
             ecg_trials.append(ecg_stim)
 
             if self.label_axis == "valence":
-                rating = float(
-                    np.asarray(subj.ScoreValence).ravel()[vid_idx]
-                )
+                rating = float(np.asarray(subj.ScoreValence).ravel()[vid_idx])
             else:
-                rating = float(
-                    np.asarray(subj.ScoreArousal).ravel()[vid_idx]
-                )
-            labels_list.append(
-                1 if rating >= self.label_threshold else 0
-            )
+                rating = float(np.asarray(subj.ScoreArousal).ravel()[vid_idx])
+            labels_list.append(1 if rating >= self.label_threshold else 0)
 
         if not eeg_trials:
-            raise EmoKitDataError(
-                f"No valid trials for subject {subject_id}"
-            )
+            raise EmoKitDataError(f"No valid trials for subject {subject_id}")
 
         min_t = min(e.shape[1] for e in eeg_trials)
         eeg_arr = np.stack([e[:, :min_t] for e in eeg_trials], axis=0)
@@ -181,7 +186,8 @@ class DREAMERDataset(BaseDataset):
         if ecg_trials:
             min_t_ecg = min(e.shape[1] for e in ecg_trials)
             result["ecg"] = np.stack(
-                [e[:, :min_t_ecg] for e in ecg_trials], axis=0,
+                [e[:, :min_t_ecg] for e in ecg_trials],
+                axis=0,
             )
 
         return result
