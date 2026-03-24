@@ -62,8 +62,7 @@ def _build_evaluator(
     evaluator_cls = _PROTOCOL_MAP.get(protocol)
     if evaluator_cls is None:
         raise ValueError(
-            f"Unknown protocol '{protocol}'. "
-            f"Available: {sorted(_PROTOCOL_MAP.keys())}"
+            f"Unknown protocol '{protocol}'. Available: {sorted(_PROTOCOL_MAP.keys())}"
         )
 
     return evaluator_cls(

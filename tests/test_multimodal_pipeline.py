@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-import pytest
 
 from emokit.datasets.base import BaseDataset
 from emokit.evaluation.protocols import LOSOEvaluator
@@ -187,10 +186,12 @@ class TestMultimodalFeaturePipeline:
 
     def test_fusion_transform(self) -> None:
         """ModalityFusionTransform concatenates modalities into flat array."""
-        pipeline = FeaturePipeline([
-            ("identity", _IdentityTransform()),
-            ("fuse", ModalityFusionTransform()),
-        ])
+        pipeline = FeaturePipeline(
+            [
+                ("identity", _IdentityTransform()),
+                ("fuse", ModalityFusionTransform()),
+            ]
+        )
         X = {
             "eeg": np.ones((4, 10)),
             "gsr": np.ones((4, 3)) * 2,

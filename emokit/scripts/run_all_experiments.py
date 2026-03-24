@@ -22,16 +22,46 @@ from emokit.scripts.reproduce_baselines import PAPER_NUMBERS, TOLERANCE
 logger = logging.getLogger(__name__)
 
 EXPERIMENTS = [
-    ("configs/deap_loso_cnnlstm_valence.yaml", "DEAP", "valence", "CNN-LSTM/DEAP/valence"),
-    ("configs/deap_loso_cnnlstm_arousal.yaml", "DEAP", "arousal", "CNN-LSTM/DEAP/arousal"),
+    (
+        "configs/deap_loso_cnnlstm_valence.yaml",
+        "DEAP",
+        "valence",
+        "CNN-LSTM/DEAP/valence",
+    ),
+    (
+        "configs/deap_loso_cnnlstm_arousal.yaml",
+        "DEAP",
+        "arousal",
+        "CNN-LSTM/DEAP/arousal",
+    ),
     ("configs/deap_loso_bidae_valence.yaml", "DEAP", "valence", "BiDAE/DEAP/valence"),
     ("configs/deap_loso_bidae_arousal.yaml", "DEAP", "arousal", "BiDAE/DEAP/arousal"),
     ("configs/deap_loso_dgcnn_valence.yaml", "DEAP", "valence", "DGCNN/DEAP/valence"),
     ("configs/deap_loso_dgcnn_arousal.yaml", "DEAP", "arousal", "DGCNN/DEAP/arousal"),
-    ("configs/deap_loso_transformer_valence.yaml", "DEAP", "valence", "Transformer-MM/DEAP/valence"),
-    ("configs/deap_loso_transformer_arousal.yaml", "DEAP", "arousal", "Transformer-MM/DEAP/arousal"),
-    ("configs/deap_loso_dgcca_valence.yaml", "DEAP", "valence", "DGCCA-AM/DEAP/valence"),
-    ("configs/deap_loso_dgcca_arousal.yaml", "DEAP", "arousal", "DGCCA-AM/DEAP/arousal"),
+    (
+        "configs/deap_loso_transformer_valence.yaml",
+        "DEAP",
+        "valence",
+        "Transformer-MM/DEAP/valence",
+    ),
+    (
+        "configs/deap_loso_transformer_arousal.yaml",
+        "DEAP",
+        "arousal",
+        "Transformer-MM/DEAP/arousal",
+    ),
+    (
+        "configs/deap_loso_dgcca_valence.yaml",
+        "DEAP",
+        "valence",
+        "DGCCA-AM/DEAP/valence",
+    ),
+    (
+        "configs/deap_loso_dgcca_arousal.yaml",
+        "DEAP",
+        "arousal",
+        "DGCCA-AM/DEAP/arousal",
+    ),
     ("configs/deap_loso_prpl_valence.yaml", "DEAP", "valence", "PR-PL/DEAP/valence"),
     ("configs/deap_loso_prpl_arousal.yaml", "DEAP", "arousal", "PR-PL/DEAP/arousal"),
     ("configs/seedv_loso_all_models.yaml", "SEED-V", "five_class", "ALL/SEED-V/5class"),
@@ -70,9 +100,7 @@ def _make_dry_run_cfg(cfg: Any, dataset_key: str) -> Any:
         )
     if getattr(cfg, "models_to_run", None):
         dry_models = [
-            model.model_copy(
-                update={"params": {**(model.params or {}), "n_epochs": 1}}
-            )
+            model.model_copy(update={"params": {**(model.params or {}), "n_epochs": 1}})
             for model in cfg.models_to_run
         ]
         cfg = cfg.model_copy(
@@ -97,7 +125,9 @@ def _override_roots(cfg: Any, args: argparse.Namespace, dataset_key: str) -> Any
     elif dataset_key == "SEED":
         dataset_root = args.seed_root
     if dataset_root:
-        return cfg.model_copy(update={"dataset": cfg.dataset.model_copy(update={"root": dataset_root})})
+        return cfg.model_copy(
+            update={"dataset": cfg.dataset.model_copy(update={"root": dataset_root})}
+        )
     return cfg
 
 
@@ -177,9 +207,10 @@ def _save_latex_tables(results: dict[str, Any], out_dir: Path) -> None:
     ]
     for key, label in models:
         stats = seedv.get(key, {})
+        mean_acc = stats.get("mean_acc", 0.0) * 100
+        std_acc = stats.get("std_acc", 0.0) * 100
         lines.append(
-            f"    {label} & "
-            f"${stats.get('mean_acc', 0.0) * 100:.1f} \\pm {stats.get('std_acc', 0.0) * 100:.1f}$ \\\\"
+            f"    {label} & " f"${mean_acc:.1f} \\pm {std_acc:.1f}$ \\\\"
         )
     lines.extend([r"    \bottomrule", r"  \end{tabular}", r"\end{table}"])
     (out_dir / "table3_seedv.tex").write_text("\n".join(lines), encoding="utf-8")
@@ -271,7 +302,9 @@ def run_all(args: argparse.Namespace) -> None:
         cfg = _override_roots(cfg, args, dataset_key)
         run_dir = out_dir / exp_key.replace("/", "_")
         cfg = cfg.model_copy(
-            update={"output": cfg.output.model_copy(update={"results_dir": str(run_dir)})}
+            update={
+                "output": cfg.output.model_copy(update={"results_dir": str(run_dir)})
+            }
         )
         logger.info("Running %s", exp_key)
 
@@ -300,7 +333,10 @@ def run_all(args: argparse.Namespace) -> None:
         except Exception as exc:
             logger.exception("Experiment failed: %s", exp_key)
             with log_path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps({"exp": exp_key, "status": "error", "error": str(exc)}) + "\n")
+                fh.write(
+                    json.dumps({"exp": exp_key, "status": "error", "error": str(exc)})
+                    + "\n"
+                )
             if not args.skip_errors:
                 raise
 
@@ -311,7 +347,9 @@ def run_all(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--deap-root", default=None)
     parser.add_argument("--seedv-root", default=None)

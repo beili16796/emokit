@@ -163,9 +163,14 @@ class SEEDDataset(BaseDataset):
 
         if (self.root / "Preprocessed_EEG").is_dir():
             import glob as _glob
+
             found = sorted(
                 Path(m)
-                for m in _glob.glob(str(self.root / "Preprocessed_EEG" / f"*{subject_id}*{session}*.mat"))
+                for m in _glob.glob(
+                    str(
+                        self.root / "Preprocessed_EEG" / f"*{subject_id}*{session}*.mat"
+                    )
+                )
             )
             if found:
                 return found[0]
@@ -229,7 +234,9 @@ class SEEDDataset(BaseDataset):
             else:
                 logger.warning(
                     "Label count (%d) != DE window count (%d) in %s; truncating",
-                    len(labels), de.shape[0], mat_path,
+                    len(labels),
+                    de.shape[0],
+                    mat_path,
                 )
                 n = min(len(labels), de.shape[0])
                 de, labels = de[:n], labels[:n]

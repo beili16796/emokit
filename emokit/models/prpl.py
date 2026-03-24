@@ -175,9 +175,7 @@ class _PRPL(nn.Module):
         label_s = torch.zeros(
             z_source.size(0), dtype=torch.long, device=z_source.device
         )
-        label_t = torch.ones(
-            z_target.size(0), dtype=torch.long, device=z_target.device
-        )
+        label_t = torch.ones(z_target.size(0), dtype=torch.long, device=z_target.device)
 
         loss = F.cross_entropy(pred_s, label_s) + F.cross_entropy(pred_t, label_t)
         return loss

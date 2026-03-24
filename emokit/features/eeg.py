@@ -136,9 +136,9 @@ class BandpowerExtractor(BaseTransform):
         Raises:
             ValueError: If *X* is not 3-D.
         """
-        assert (
-            X.ndim == 3
-        ), f"BandpowerExtractor expects 3-D input (N,C,T), got {X.ndim}-D"
+        assert X.ndim == 3, (
+            f"BandpowerExtractor expects 3-D input (N,C,T), got {X.ndim}-D"
+        )
 
         n, c, t = X.shape
         num_bands = len(self.bands)

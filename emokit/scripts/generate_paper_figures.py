@@ -29,7 +29,12 @@ def _find_median_checkpoint(results_dir: Path, exp_key: str) -> Path | None:
         per_subject.items(),
         key=lambda item: abs(item[1].get("accuracy", 0.0) - mean_acc),
     )
-    ckpt = results_dir / exp_key.replace("/", "_") / "checkpoints" / f"subject_{int(sid):02d}_best.pt"
+    ckpt = (
+        results_dir
+        / exp_key.replace("/", "_")
+        / "checkpoints"
+        / f"subject_{int(sid):02d}_best.pt"
+    )
     return ckpt if ckpt.exists() else None
 
 
@@ -103,7 +108,9 @@ def fig4_per_subject_boxplot(results_json: Path, figures_dir: Path) -> None:
     values = []
     for model in models:
         per_subject = data.get(f"{model}/DEAP/valence", {}).get("per_subject", {})
-        values.append([metrics.get("accuracy", 0.0) * 100 for metrics in per_subject.values()])
+        values.append(
+            [metrics.get("accuracy", 0.0) * 100 for metrics in per_subject.values()]
+        )
 
     fig, ax = plt.subplots(figsize=(8, 4), dpi=150)
     ax.boxplot(values, labels=models, patch_artist=True)

@@ -231,7 +231,9 @@ class SEEDVDataset(BaseDataset):
             else:
                 logger.warning(
                     "Label count (%d) != DE window count (%d) in %s; truncating",
-                    len(labels), de.shape[0], mat_path,
+                    len(labels),
+                    de.shape[0],
+                    mat_path,
                 )
                 n = min(len(labels), de.shape[0])
                 de, labels = de[:n], labels[:n]
@@ -248,8 +250,7 @@ class SEEDVDataset(BaseDataset):
         mat = loadmat(str(mat_path), squeeze_me=True)
 
         data_keys = [
-            k for k in mat
-            if not k.startswith("__") and k != "labels" and k != "label"
+            k for k in mat if not k.startswith("__") and k != "labels" and k != "label"
         ]
         trials: list[np.ndarray] = []
         for key in sorted(data_keys):
