@@ -11,6 +11,7 @@ import pickle
 from pathlib import Path
 
 import numpy as np
+from scipy.io import loadmat
 from scipy.signal import butter, resample_poly, sosfiltfilt
 
 from emokit.datasets.base import _REGISTRY, BaseDataset
@@ -80,9 +81,11 @@ class DEAPDataset(BaseDataset):
     Reference:
         Koelstra et al., *IEEE Trans. Affective Computing*, 2012.
 
-    The dataset ships as either raw ``.bdf`` files or pre-processed ``.dat``
-    (pickled) files.  This loader tries ``.bdf`` first and falls back to
-    ``.dat``.
+    Supports three file formats in priority order:
+
+    1. ``.mat`` — MATLAB preprocessed (``{subject_id}.mat``, e.g. ``1.mat``)
+    2. ``.dat`` — Python pickle preprocessed (``s{subject_id:02d}.dat``)
+    3. ``.bdf`` — Raw BiosemiADF (requires MNE)
 
     Args:
         root: Path to the DEAP data directory.
@@ -143,65 +146,38 @@ class DEAPDataset(BaseDataset):
         return ["Low", "High"]
 
     # ------------------------------------------------------------------
-    # I/O
+    # I/O helpers
     # ------------------------------------------------------------------
 
-    def _subject_stem(self, subject_id: int) -> str:
-        return f"s{subject_id:02d}"
+    def _load_mat(self, path: Path) -> tuple[np.ndarray, np.ndarray]:
+        """Load a MATLAB ``.mat`` file (DEAP preprocessed).
 
-    def _load_bdf(self, path: Path) -> tuple[np.ndarray, np.ndarray]:
-        """Read a ``.bdf`` file via MNE and return ``(data, labels)``.
+        Expected variables:
+            ``data``: shape ``(40, 40, 8064)`` — 40 trials, 40 channels, 128Hz×63s
+            ``labels``: shape ``(40, 4)`` — valence, arousal, dominance, liking
 
         Returns:
-            data: ``(n_trials, n_channels, n_samples)``
-            labels: ``(n_trials,)`` binarised.
+            data: ``(n_trials, n_channels, n_samples)`` with baseline removed
+            labels: ``(n_trials,)`` binarised
         """
-        try:
-            import mne  # noqa: WPS433 (local import – optional heavy dep)
-        except ImportError as exc:
-            raise EmoKitDataError(
-                "MNE is required for .bdf loading. Install with: pip install mne"
-            ) from exc
+        mat = loadmat(str(path))
+        data = np.asarray(mat["data"], dtype=np.float64)
+        raw_labels = np.asarray(mat["labels"], dtype=np.float64)
 
-        raw = mne.io.read_raw_bdf(str(path), preload=True, verbose=False)
-        raw.pick_channels(_EEG_CHANNELS, ordered=True)
+        assert data.ndim == 3, f"Expected 3D array, got shape {data.shape}"
 
-        raw.filter(
-            1.0,
-            45.0,
-            method="iir",
-            iir_params=dict(order=5, ftype="butter"),
-            verbose=False,
-        )
-        raw.set_eeg_reference("average", verbose=False)
+        baseline_samples = int(_BASELINE_SEC * _DOWNSAMPLED_FS)  # 384
+        if data.shape[2] > int((_TRIAL_SEC - _BASELINE_SEC) * _DOWNSAMPLED_FS):
+            data = data[:, :, baseline_samples:]
 
-        sfreq = raw.info["sfreq"]
-        data_arr = raw.get_data()  # (n_channels, total_samples)
+        sos = butter(5, [1.0, 45.0], btype="band", fs=_DOWNSAMPLED_FS, output="sos")
+        data[:, :32, :] = sosfiltfilt(sos, data[:, :32, :], axis=-1)
 
-        trial_samples = int(_TRIAL_SEC * sfreq)
-        baseline_samples = int(_BASELINE_SEC * sfreq)
-        trials: list[np.ndarray] = []
-        for t in range(_N_TRIALS):
-            start = t * (trial_samples + baseline_samples) + baseline_samples
-            end = start + trial_samples
-            if end > data_arr.shape[1]:
-                break
-            trials.append(data_arr[:, start:end])
+        mean = data[:, :32, :].mean(axis=1, keepdims=True)
+        data[:, :32, :] -= mean
 
-        data = np.stack(trials, axis=0)  # (N, C, T)
-
-        down = int(sfreq / _DOWNSAMPLED_FS)
-        if down > 1:
-            data = resample_poly(data, up=1, down=down, axis=-1)
-
-        labels_path = path.parent / "labels.npy"
-        if labels_path.exists():
-            all_labels = np.load(labels_path)
-            col = 0 if self.label_axis == "valence" else 1
-            labels = (all_labels[:, col] >= self.label_threshold).astype(np.int64)
-        else:
-            logger.warning("No labels.npy found alongside .bdf – using dummy labels")
-            labels = np.zeros(data.shape[0], dtype=np.int64)
+        col = 0 if self.label_axis == "valence" else 1
+        labels = (raw_labels[:, col] > self.label_threshold).astype(np.int64)
 
         return data, labels
 
@@ -231,7 +207,51 @@ class DEAPDataset(BaseDataset):
         data[:, :32, :] -= mean
 
         col = 0 if self.label_axis == "valence" else 1
-        labels = (raw_labels[:, col] >= self.label_threshold).astype(np.int64)
+        labels = (raw_labels[:, col] > self.label_threshold).astype(np.int64)
+
+        return data, labels
+
+    def _load_bdf(self, path: Path) -> tuple[np.ndarray, np.ndarray]:
+        """Read a ``.bdf`` file via MNE and return ``(data, labels)``."""
+        try:
+            import mne
+        except ImportError as exc:
+            raise EmoKitDataError(
+                "MNE is required for .bdf loading. Install with: pip install mne"
+            ) from exc
+
+        raw = mne.io.read_raw_bdf(str(path), preload=True, verbose=False)
+        raw.pick_channels(_EEG_CHANNELS, ordered=True)
+        raw.filter(1.0, 45.0, method="iir",
+                   iir_params=dict(order=5, ftype="butter"), verbose=False)
+        raw.set_eeg_reference("average", verbose=False)
+
+        sfreq = raw.info["sfreq"]
+        data_arr = raw.get_data()
+
+        trial_samples = int(_TRIAL_SEC * sfreq)
+        baseline_samples = int(_BASELINE_SEC * sfreq)
+        trials: list[np.ndarray] = []
+        for t in range(_N_TRIALS):
+            start = t * (trial_samples + baseline_samples) + baseline_samples
+            end = start + trial_samples
+            if end > data_arr.shape[1]:
+                break
+            trials.append(data_arr[:, start:end])
+
+        data = np.stack(trials, axis=0)
+        down = int(sfreq / _DOWNSAMPLED_FS)
+        if down > 1:
+            data = resample_poly(data, up=1, down=down, axis=-1)
+
+        labels_path = path.parent / "labels.npy"
+        if labels_path.exists():
+            all_labels = np.load(labels_path)
+            col = 0 if self.label_axis == "valence" else 1
+            labels = (all_labels[:, col] >= self.label_threshold).astype(np.int64)
+        else:
+            logger.warning("No labels.npy found alongside .bdf – using dummy labels")
+            labels = np.zeros(data.shape[0], dtype=np.int64)
 
         return data, labels
 
@@ -242,32 +262,33 @@ class DEAPDataset(BaseDataset):
     def read_raw(self, subject_id: int) -> dict[str, np.ndarray]:
         """Load raw data for one DEAP subject.
 
-        Tries ``.bdf`` first, then ``.dat``.
+        Tries ``.mat`` first (e.g. ``1.mat``), then ``.dat`` (e.g.
+        ``s01.dat``), then ``.bdf``.
 
         Args:
             subject_id: 1-based subject identifier (1-32).
 
         Returns:
             Dict with modality arrays and a ``'labels'`` key.
-
-        Raises:
-            EmoKitDataError: If neither file format is found.
         """
-        stem = self._subject_stem(subject_id)
+        mat_path = self.root / f"{subject_id}.mat"
+        dat_path = self.root / f"s{subject_id:02d}.dat"
+        bdf_path = self.root / f"s{subject_id:02d}.bdf"
 
-        bdf_path = self.root / f"{stem}.bdf"
-        dat_path = self.root / f"{stem}.dat"
-
-        if bdf_path.exists():
-            logger.info("Loading %s via BDF", bdf_path)
-            data, labels = self._load_bdf(bdf_path)
+        if mat_path.exists():
+            logger.info("Loading %s via MAT", mat_path)
+            data, labels = self._load_mat(mat_path)
         elif dat_path.exists():
             logger.info("Loading %s via DAT", dat_path)
             data, labels = self._load_dat(dat_path)
+        elif bdf_path.exists():
+            logger.info("Loading %s via BDF", bdf_path)
+            data, labels = self._load_bdf(bdf_path)
         else:
             raise FileNotFoundError(
-                f"DEAP file not found: {dat_path}\n"
-                f"Please download from http://eecs.qmul.ac.uk/mmv/datasets/deap/\n"
+                f"DEAP file not found for subject {subject_id} "
+                f"(tried {mat_path}, {dat_path}, {bdf_path}).\n"
+                f"Download from http://eecs.qmul.ac.uk/mmv/datasets/deap/\n"
                 f"Set EMOKIT_DATA_ROOT or pass root= explicitly."
             )
 
@@ -283,13 +304,5 @@ class DEAPDataset(BaseDataset):
         ratings: np.ndarray,
         threshold: float = 5.0,
     ) -> np.ndarray:
-        """Convert continuous V/A ratings to binary labels.
-
-        Args:
-            ratings: 1-D array of continuous ratings.
-            threshold: Values ``>= threshold`` are mapped to 1.
-
-        Returns:
-            Integer array of 0/1 labels.
-        """
+        """Convert continuous V/A ratings to binary labels."""
         return (np.asarray(ratings) >= threshold).astype(np.int64)
