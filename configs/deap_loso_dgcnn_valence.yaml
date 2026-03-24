@@ -1,0 +1,45 @@
+_base_: standard_protocol.yaml
+
+experiment:
+  name: deap_loso_dgcnn_valence
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DEAP
+  root: ${EMOKIT_DATA_ROOT}/DEAP
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+  label_axis: valence
+  params:
+    label_threshold: 5.0
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params: {fs: 128}
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: DGCNN
+  params:
+    n_classes: 2
+    n_channels: 32
+    n_bands: 5
+    hidden_dim: 64
+    K: 2
+    lr: 0.001
+    weight_decay: 0.0001
+    batch_size: 64
+    n_epochs: 50
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/deap_loso_dgcnn_valence
+  save_checkpoints: true

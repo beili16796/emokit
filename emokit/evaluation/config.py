@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +68,13 @@ class ModelConfig(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class MultiModelSpec(BaseModel):
+    """Single model entry for batch evaluation configs."""
+
+    name: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class EvaluationConfig(BaseModel):
     """Evaluation protocol settings."""
 
@@ -98,14 +107,28 @@ class OutputConfig(BaseModel):
 class FullConfig(BaseModel):
     """Complete experiment configuration aggregating all sub-configs."""
 
+    model_config = {"protected_namespaces": ()}
+
     experiment: ExperimentConfig
     dataset: DatasetConfig
     feature_pipeline: FeaturePipelineConfig = Field(
         default_factory=lambda: FeaturePipelineConfig(steps=[])
     )
-    model: ModelConfig
+    model: ModelConfig | None = None
+    model_defaults: dict[str, Any] = Field(default_factory=dict)
+    models_to_run: list[MultiModelSpec] = Field(default_factory=list)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
+
+    @field_validator("models_to_run")
+    @classmethod
+    def _ensure_model_present(
+        cls, v: list[MultiModelSpec], info: Any
+    ) -> list[MultiModelSpec]:
+        data = info.data
+        if data.get("model") is None and not v:
+            raise ValueError("Either 'model' or 'models_to_run' must be provided.")
+        return v
 
 
 class ConfigLoader:
@@ -135,8 +158,7 @@ class ConfigLoader:
             raise EmoKitConfigError(f"Config file not found: {path}")
 
         try:
-            raw = path.read_text(encoding="utf-8")
-            data = yaml.safe_load(raw)
+            data = _load_yaml_with_base(path)
         except yaml.YAMLError as exc:
             raise EmoKitConfigError(f"Invalid YAML in {path}: {exc}") from exc
 
@@ -146,7 +168,7 @@ class ConfigLoader:
             )
 
         try:
-            return FullConfig(**data)
+            return FullConfig(**_expand_env(data))
         except ValidationError as exc:
             readable = _format_validation_errors(exc)
             raise EmoKitConfigError(
@@ -161,3 +183,56 @@ def _format_validation_errors(exc: ValidationError) -> str:
         loc = " -> ".join(str(x) for x in err["loc"])
         lines.append(f"  [{loc}] {err['msg']}")
     return "\n".join(lines)
+
+
+def _load_yaml_with_base(path: Path) -> dict[str, Any]:
+    """Load YAML with optional ``_base_`` inheritance."""
+    raw = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(raw)
+    if not isinstance(data, dict):
+        return data
+
+    base_name = data.pop("_base_", None)
+    if not base_name:
+        return data
+
+    base_path = (path.parent / base_name).resolve()
+    if not base_path.exists():
+        raise EmoKitConfigError(f"Base config not found: {base_path}")
+
+    base_data = _load_yaml_with_base(base_path)
+    if not isinstance(base_data, dict):
+        raise EmoKitConfigError(
+            f"Base config must be a YAML mapping, got {type(base_data).__name__}"
+        )
+    return _deep_merge(base_data, data)
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge two dictionaries."""
+    merged = dict(base)
+    for key, value in override.items():
+        if (
+            key in merged
+            and isinstance(merged[key], dict)
+            and isinstance(value, dict)
+        ):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _expand_env(obj: Any) -> Any:
+    """Recursively expand ``${VAR}`` references in string values."""
+    if isinstance(obj, str):
+        return re.sub(
+            r"\$\{(\w+)\}",
+            lambda m: os.environ.get(m.group(1), m.group(0)),
+            obj,
+        )
+    if isinstance(obj, dict):
+        return {k: _expand_env(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_expand_env(v) for v in obj]
+    return obj

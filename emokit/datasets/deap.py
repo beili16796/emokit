@@ -53,6 +53,8 @@ _EEG_CHANNELS: list[str] = [
     "Cz",
 ]
 
+DEAP_EEG_CHANNELS: list[str] = list(_EEG_CHANNELS)
+
 _PERIPHERAL_CHANNELS: list[str] = [
     "hEOG",
     "vEOG",

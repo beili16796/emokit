@@ -1,0 +1,44 @@
+_base_: standard_protocol.yaml
+
+experiment:
+  name: deap_loso_prpl_arousal
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DEAP
+  root: ${EMOKIT_DATA_ROOT}/DEAP
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+  label_axis: arousal
+  params:
+    label_threshold: 5.0
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params: {fs: 128}
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: PR-PL
+  params:
+    n_classes: 2
+    n_feat: 160
+    prototype_dim: 128
+    margin: 0.5
+    lr: 0.001
+    batch_size: 64
+    n_epochs: 50
+    lambda_pair: 0.5
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/deap_loso_prpl_arousal
+  save_checkpoints: true

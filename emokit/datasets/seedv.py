@@ -177,14 +177,17 @@ class SEEDVDataset(BaseDataset):
     def _load_de_features(self, mat_path: Path) -> tuple[np.ndarray, np.ndarray]:
         """Load pre-computed DE features from a ``.mat`` file.
 
+        Handles both numeric arrays and MATLAB cell arrays (``object`` dtype)
+        for the ``de_LDS`` variable.
+
         Returns:
-            data: ``(n_trials, n_channels, n_bands)``
-            labels: ``(n_trials,)``
+            data: ``(n_windows, n_channels, n_bands)``
+            labels: ``(n_windows,)``
         """
         mat = loadmat(str(mat_path), squeeze_me=True)
 
         de_key = None
-        for key in ("de_LDS", "de_lds", "DE_LDS"):
+        for key in ("de_LDS", "de_lds", "DE_LDS", "de_movingAve", "de_LDS1"):
             if key in mat:
                 de_key = key
                 break
@@ -194,14 +197,44 @@ class SEEDVDataset(BaseDataset):
                 f"Available keys: {[k for k in mat if not k.startswith('__')]}"
             )
 
-        de = np.asarray(mat[de_key], dtype=np.float64)
-        if de.ndim == 2:
-            de = de[np.newaxis, ...]
+        raw_de = mat[de_key]
+
+        if raw_de.dtype == object:
+            trials: list[np.ndarray] = []
+            for i in range(len(raw_de)):
+                cell = np.asarray(raw_de[i], dtype=np.float64)
+                if cell.ndim == 2:
+                    # (n_channels, n_bands) — single window per trial
+                    trials.append(cell[np.newaxis, ...])
+                elif cell.ndim == 3:
+                    # (n_channels, n_bands, n_windows) → transpose
+                    trials.append(np.transpose(cell, (2, 0, 1)))
+                else:
+                    trials.append(cell.reshape(-1, 62, 5))
+            de = np.concatenate(trials, axis=0)
+        else:
+            de = np.asarray(raw_de, dtype=np.float64)
+            if de.ndim == 2:
+                de = de[np.newaxis, ...]
+            elif de.ndim == 3 and de.shape[0] == 62:
+                # (n_channels, n_bands, n_windows) → (n_windows, n_channels, n_bands)
+                de = np.transpose(de, (2, 0, 1))
 
         labels_raw = mat.get("labels", mat.get("label", None))
         if labels_raw is None:
             raise EmoKitDataError(f"No label variable found in {mat_path}")
         labels = np.asarray(labels_raw, dtype=np.int64).ravel()
+
+        if len(labels) != de.shape[0]:
+            if len(labels) == 1:
+                labels = np.repeat(labels, de.shape[0])
+            else:
+                logger.warning(
+                    "Label count (%d) != DE window count (%d) in %s; truncating",
+                    len(labels), de.shape[0], mat_path,
+                )
+                n = min(len(labels), de.shape[0])
+                de, labels = de[:n], labels[:n]
 
         return de, labels
 
