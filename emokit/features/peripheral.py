@@ -58,9 +58,9 @@ class HRVExtractor(BaseTransform):
         """
         import neurokit2 as nk
 
-        assert X.ndim == 3 and X.shape[1] == 1, (
-            f"HRVExtractor expects shape (N, 1, T), got {X.shape}"
-        )
+        assert (
+            X.ndim == 3 and X.shape[1] == 1
+        ), f"HRVExtractor expects shape (N, 1, T), got {X.shape}"
 
         n = X.shape[0]
         out = np.full((n, 5), np.nan, dtype=np.float64)
@@ -139,9 +139,9 @@ class GSRExtractor(BaseTransform):
         """
         import neurokit2 as nk
 
-        assert X.ndim == 3 and X.shape[1] == 1, (
-            f"GSRExtractor expects shape (N, 1, T), got {X.shape}"
-        )
+        assert (
+            X.ndim == 3 and X.shape[1] == 1
+        ), f"GSRExtractor expects shape (N, 1, T), got {X.shape}"
 
         n = X.shape[0]
         out = np.full((n, 3), np.nan, dtype=np.float64)
@@ -204,9 +204,9 @@ class ModalityFusionTransform(BaseTransform):
         Raises:
             ValueError: If *X* is not a dict.
         """
-        assert isinstance(X, dict), (
-            f"ModalityFusionTransform expects dict input, got {type(X).__name__}"
-        )
+        assert isinstance(
+            X, dict
+        ), f"ModalityFusionTransform expects dict input, got {type(X).__name__}"
         if self.modality_order is not None:
             self._fitted_order = list(self.modality_order)
         else:
@@ -232,9 +232,9 @@ class ModalityFusionTransform(BaseTransform):
                 required modality key is missing.
             ValueError: If *X* is not a dict.
         """
-        assert isinstance(X, dict), (
-            f"ModalityFusionTransform expects dict input, got {type(X).__name__}"
-        )
+        assert isinstance(
+            X, dict
+        ), f"ModalityFusionTransform expects dict input, got {type(X).__name__}"
         if self._fitted_order is None:
             raise EmoKitFeatureError("ModalityFusionTransform has not been fitted.")
 

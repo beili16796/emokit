@@ -165,9 +165,9 @@ class TestDGCNN:
         y = np.random.randint(0, 3, 16)
         model.fit(X, y)
         adj_after = model.network.adjacency.detach().numpy()
-        assert not np.allclose(adj_before, adj_after, atol=1e-7), (
-            "Adjacency did not update during training"
-        )
+        assert not np.allclose(
+            adj_before, adj_after, atol=1e-7
+        ), "Adjacency did not update during training"
 
 
 # ---------------------------------------------------------------------------
@@ -379,9 +379,9 @@ class TestPRPL:
 
         z = net.encode(X)
         loss_after = net.pairwise_loss(z, y).item()
-        assert loss_after < loss_before, (
-            f"Pairwise loss did not decrease: {loss_before:.4f} → {loss_after:.4f}"
-        )
+        assert (
+            loss_after < loss_before
+        ), f"Pairwise loss did not decrease: {loss_before:.4f} → {loss_after:.4f}"
 
     def test_fit(self, seed: int) -> None:
         """Training completes."""
@@ -445,9 +445,9 @@ class TestModelRegistry:
     def test_registered_models(self) -> None:
         """All six models are registered."""
         expected = {"CNN-LSTM", "DGCNN", "Transformer-MM", "BiDAE", "DGCCA-AM", "PR-PL"}
-        assert expected.issubset(set(registry.keys())), (
-            f"Missing models: {expected - set(registry.keys())}"
-        )
+        assert expected.issubset(
+            set(registry.keys())
+        ), f"Missing models: {expected - set(registry.keys())}"
 
     def test_getitem(self) -> None:
         """Registry lookup returns correct class."""

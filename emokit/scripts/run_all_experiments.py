@@ -209,9 +209,7 @@ def _save_latex_tables(results: dict[str, Any], out_dir: Path) -> None:
         stats = seedv.get(key, {})
         mean_acc = stats.get("mean_acc", 0.0) * 100
         std_acc = stats.get("std_acc", 0.0) * 100
-        lines.append(
-            f"    {label} & " f"${mean_acc:.1f} \\pm {std_acc:.1f}$ \\\\"
-        )
+        lines.append(f"    {label} & " f"${mean_acc:.1f} \\pm {std_acc:.1f}$ \\\\")
     lines.extend([r"    \bottomrule", r"  \end{tabular}", r"\end{table}"])
     (out_dir / "table3_seedv.tex").write_text("\n".join(lines), encoding="utf-8")
 

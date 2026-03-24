@@ -187,9 +187,9 @@ class TestDEExtractor:
 
         de = DEExtractor(fs=fs).fit_transform(X)
         alpha_idx = 2  # delta, theta, alpha, beta, gamma
-        assert de[0, 0, alpha_idx] == de[0, 0, :].max(), (
-            f"Alpha DE should be max; got DE = {de[0, 0, :]}"
-        )
+        assert (
+            de[0, 0, alpha_idx] == de[0, 0, :].max()
+        ), f"Alpha DE should be max; got DE = {de[0, 0, :]}"
 
     def test_wrong_ndim_raises(self) -> None:
         with pytest.raises(AssertionError, match="Expected \\(N,C,T\\)"):

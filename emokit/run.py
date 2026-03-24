@@ -140,7 +140,10 @@ def main() -> None:
         cfg = cfg.model_copy(
             update={
                 "dataset": cfg.dataset.model_copy(
-                    update={"name": "SYNTHETIC", "root": None}
+                    update={
+                        "name": "SYNTHETIC",
+                        "root": "/tmp/emokit_synthetic",
+                    }
                 )
             }
         )
