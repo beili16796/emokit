@@ -102,6 +102,7 @@ class BaseModel(ABC):
     """
 
     registry_name: str = ""
+    multimodal: bool = False
 
     def __init__(self, n_classes: int, device: str = "cpu") -> None:
         self.n_classes = n_classes

@@ -146,11 +146,19 @@ class FeaturePipeline:
             raise EmoKitFeatureError("Pipeline step names must be unique.")
         self.steps = steps
 
-    def fit(self, X: np.ndarray, y: np.ndarray | None = None) -> FeaturePipeline:
+    def fit(
+        self, X: np.ndarray | dict[str, np.ndarray], y: np.ndarray | None = None
+    ) -> FeaturePipeline:
         """Fit each step sequentially, passing transformed output forward.
 
+        When *X* is a dict of modality arrays, steps that do not accept
+        dicts are applied independently to each modality.  Steps whose
+        ``fit`` signature accepts a dict (like
+        :class:`~emokit.features.peripheral.ModalityFusionTransform`)
+        receive the full dict.
+
         Args:
-            X: Input array.
+            X: Input array or dict of modality arrays.
             y: Optional labels (forwarded to each step).
 
         Returns:
@@ -158,32 +166,42 @@ class FeaturePipeline:
         """
         for name, step in self.steps:
             logger.debug("Fitting step '%s'", name)
-            X = step.fit_transform(X, y)
+            if isinstance(X, dict) and not _step_accepts_dict(step):
+                X = {k: step.fit_transform(v, y) for k, v in X.items()}
+            else:
+                X = step.fit_transform(X, y)
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(
+        self, X: np.ndarray | dict[str, np.ndarray]
+    ) -> np.ndarray | dict[str, np.ndarray]:
         """Transform *X* through each fitted step sequentially.
 
         Args:
-            X: Input array.
+            X: Input array or dict of modality arrays.
 
         Returns:
-            Transformed array.
+            Transformed array or dict.
         """
         for name, step in self.steps:
             logger.debug("Transforming step '%s'", name)
-            X = step.transform(X)
+            if isinstance(X, dict) and not _step_accepts_dict(step):
+                X = {k: step.transform(v) for k, v in X.items()}
+            else:
+                X = step.transform(X)
         return X
 
-    def fit_transform(self, X: np.ndarray, y: np.ndarray | None = None) -> np.ndarray:
+    def fit_transform(
+        self, X: np.ndarray | dict[str, np.ndarray], y: np.ndarray | None = None
+    ) -> np.ndarray | dict[str, np.ndarray]:
         """Fit the pipeline and return the final transformed output.
 
         Args:
-            X: Input array.
+            X: Input array or dict of modality arrays.
             y: Optional labels.
 
         Returns:
-            Transformed array.
+            Transformed array or dict.
         """
         self.fit(X, y)
         return self.transform(X)
@@ -263,6 +281,13 @@ class FeaturePipeline:
                 )
             steps.append((entry["name"], transform_cls(**params)))
         return cls(steps)
+
+
+def _step_accepts_dict(step: BaseTransform) -> bool:
+    """Return ``True`` if a transform step natively handles dict input."""
+    from emokit.features.peripheral import ModalityFusionTransform
+
+    return isinstance(step, ModalityFusionTransform)
 
 
 def _convert_numpy(obj: Any) -> Any:

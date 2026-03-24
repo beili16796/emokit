@@ -122,6 +122,8 @@ class TransformerMMModel(BaseModel):
         n_layers, lr, batch_size, n_epochs, device.
     """
 
+    multimodal = True
+
     def __init__(
         self,
         n_classes: int = 3,

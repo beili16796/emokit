@@ -55,15 +55,17 @@ def compute_metrics(
 
 
 def _stratified_val_split(
-    X: np.ndarray,
+    X: np.ndarray | dict[str, np.ndarray],
     y: np.ndarray,
     val_fraction: float = 0.1,
     seed: int = 42,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[Any, np.ndarray, Any, np.ndarray | None]:
     """Split arrays into train and validation sets with stratification.
 
+    Supports both plain arrays and modality dicts.
+
     Args:
-        X: Feature array.
+        X: Feature array or dict of modality arrays.
         y: Label array.
         val_fraction: Fraction reserved for validation.
         seed: Random seed.
@@ -74,10 +76,19 @@ def _stratified_val_split(
     if val_fraction <= 0 or len(np.unique(y)) < 2 or len(y) < 4:
         return X, y, None, None  # type: ignore[return-value]
 
+    ref = next(iter(X.values())) if isinstance(X, dict) else X
     splitter = StratifiedShuffleSplit(
         n_splits=1, test_size=val_fraction, random_state=seed
     )
-    train_idx, val_idx = next(splitter.split(X, y))
+    train_idx, val_idx = next(splitter.split(ref, y))
+
+    if isinstance(X, dict):
+        return (
+            _split_dict(X, train_idx),
+            y[train_idx],
+            _split_dict(X, val_idx),
+            y[val_idx],
+        )
     return X[train_idx], y[train_idx], X[val_idx], y[val_idx]
 
 
@@ -113,6 +124,11 @@ class LOSOEvaluator:
 
     def run(self) -> dict[str, Any]:
         """Execute LOSO evaluation over all subjects.
+
+        Supports both unimodal (flat array) and multimodal (dict of arrays)
+        models.  When the target model has ``multimodal = True``, per-subject
+        data is stored as ``dict[str, np.ndarray]`` keyed by modality name
+        so that the model receives the input format it expects.
 
         Returns:
             Dict with ``per_subject``, ``mean``, ``std``, and ``config``.
@@ -680,6 +696,26 @@ class ResultLogger:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _peek_model_cls(model_name: str) -> type:
+    """Look up a model class without instantiating it."""
+    from emokit.models.base import registry as model_registry
+
+    return model_registry[model_name]
+
+
+def _concat_dicts(dicts: list[dict[str, np.ndarray]]) -> dict[str, np.ndarray]:
+    """Concatenate a list of modality dicts along axis 0."""
+    keys = dicts[0].keys()
+    return {k: np.concatenate([d[k] for d in dicts], axis=0) for k in keys}
+
+
+def _split_dict(
+    X: dict[str, np.ndarray], idx: np.ndarray
+) -> dict[str, np.ndarray]:
+    """Index into each array of a modality dict."""
+    return {k: v[idx] for k, v in X.items()}
 
 
 def _clone_pipeline(pipeline: FeaturePipeline) -> FeaturePipeline:
