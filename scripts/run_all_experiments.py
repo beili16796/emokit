@@ -271,14 +271,13 @@ def _run_single(
         if model_name == "Transformer-MM":
             n_bands = model_params.get("n_bands", 5)
             model_params["n_peripheral_feat"] = n_ch
-            n_samples = n_bands + 1
             ds = _make_synthetic_dataset(
                 n_subjects=3,
                 n_trials=8,
                 n_channels=n_ch,
                 n_classes=2,
                 modalities=modalities,
-                fs=float(n_samples),
+                fs=float(n_bands),
                 window_sec=1.0,
             )
         else:
