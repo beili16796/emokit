@@ -23,21 +23,24 @@ _EXPECTED_N_TRIALS = 40
 _EXPECTED_N_EEG_CHANNELS = 32
 _EXPECTED_FS = 128
 _BASELINE_SEC = 3.0
-_TRIAL_SEC = 60.0
-_EXPECTED_SAMPLES = int((_TRIAL_SEC - _BASELINE_SEC) * _EXPECTED_FS)  # 7680
+_TOTAL_RECORDING_SEC = 63.0  # 3s baseline + 60s trial
+_EXPECTED_SAMPLES = int((_TOTAL_RECORDING_SEC - _BASELINE_SEC) * _EXPECTED_FS)  # 7680
 
 
 def verify(root: str, subject_id: int) -> None:
     root_path = Path(root)
+    mat_path = root_path / f"{subject_id}.mat"
     dat_path = root_path / f"s{subject_id:02d}.dat"
     bdf_path = root_path / f"s{subject_id:02d}.bdf"
-    found = dat_path if dat_path.exists() else bdf_path if bdf_path.exists() else None
-    if found is None:
+    for p in (mat_path, dat_path, bdf_path):
+        if p.exists():
+            print(f"Found: {p} ({p.stat().st_size / 1024:.0f} KB)")
+            break
+    else:
         raise FileNotFoundError(
             f"No file found for subject {subject_id} in {root_path}. "
-            f"Looked for: {dat_path}, {bdf_path}"
+            f"Looked for: {mat_path}, {dat_path}, {bdf_path}"
         )
-    print(f"Found: {found} ({found.stat().st_size / 1024:.0f} KB)")
 
     t0 = time.perf_counter()
     ds = DEAPDataset(root=root, subjects=[subject_id], label_axis="valence")

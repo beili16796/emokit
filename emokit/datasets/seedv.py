@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import pickle
 from pathlib import Path
 
 import numpy as np
@@ -85,12 +86,15 @@ _EEG_CHANNELS: list[str] = [
 
 _EOG_CHANNELS: list[str] = ["hEOG", "vEOG", "hEOG2"]
 
-_EMOTION_LABELS: list[str] = ["happy", "sad", "neutral", "fear", "disgust"]
+_EMOTION_LABELS: list[str] = ["happy", "fear", "neutral", "sad", "disgust"]
 
 _N_SUBJECTS: int = 16
 _N_SESSIONS: int = 3
+_N_TRIALS_PER_SESSION: int = 15
+_N_TOTAL_TRIALS: int = _N_SESSIONS * _N_TRIALS_PER_SESSION  # 45
 _FS: float = 200.0
-
+_N_EEG_CH: int = 62
+_N_BANDS: int = 5
 
 SEED_62_CHANNELS: list[str] = list(_EEG_CHANNELS)
 
@@ -102,18 +106,21 @@ class SEEDVDataset(BaseDataset):
     Reference:
         Liu et al., *IEEE Trans. Affective Computing*, 2021.
 
-    The dataset is distributed as ``.mat`` files containing either raw EEG
-    or pre-extracted differential entropy (DE) features.
+    Supports two on-disk formats:
+
+    1. **NPZ** (preferred): ``EEG_DE_features/{subject_id}_123.npz`` containing
+       pickle-serialized dicts of pre-extracted DE features with shape
+       ``(n_windows, 310)`` per trial (310 = 62 channels × 5 bands).
+    2. **MAT**: Per-session ``.mat`` files with ``de_LDS`` variable.
 
     Args:
         root: Path to the SEED-V data directory.
         subjects: Subject IDs to load (1-based, 1–16).
-        window_sec: Sliding-window length in seconds.
-        overlap: Fractional overlap for the sliding window.
+        window_sec: Sliding-window length in seconds (unused for pre-extracted).
+        overlap: Fractional overlap (unused for pre-extracted).
         modalities: Subset of ``{'eeg', 'eog'}`` to include.
         sessions: Which sessions to load (1-based); ``None`` loads all.
-        use_de_features: If ``True``, load DE features directly from mat
-            instead of raw signals.
+        use_de_features: If ``True`` (default), load pre-extracted DE features.
     """
 
     def __init__(
@@ -124,7 +131,7 @@ class SEEDVDataset(BaseDataset):
         overlap: float = 0.5,
         modalities: list[str] | None = None,
         sessions: list[int] | None = None,
-        use_de_features: bool = False,
+        use_de_features: bool = True,
     ) -> None:
         super().__init__(
             root=root,
@@ -139,7 +146,6 @@ class SEEDVDataset(BaseDataset):
 
     @property
     def is_pre_extracted(self) -> bool:
-        """Whether this dataset contains pre-extracted DE features."""
         return self._pre_extracted
 
     def _get_fs(self) -> float:
@@ -158,8 +164,77 @@ class SEEDVDataset(BaseDataset):
     def get_label_names(self) -> list[str]:
         return list(_EMOTION_LABELS)
 
+    # ------------------------------------------------------------------
+    # NPZ loading (primary format on local disk)
+    # ------------------------------------------------------------------
+
+    def _find_npz(self, subject_id: int) -> Path | None:
+        """Find the NPZ file for a subject."""
+        patterns = [
+            self.root / "EEG_DE_features" / f"{subject_id}_123.npz",
+            self.root / f"{subject_id}_123.npz",
+        ]
+        for p in patterns:
+            if p.exists():
+                return p
+        return None
+
+    def _load_npz(self, npz_path: Path) -> tuple[np.ndarray, np.ndarray]:
+        """Load pre-extracted DE features from NPZ (pickle-encoded dicts).
+
+        The NPZ contains:
+        - ``data``: pickle-serialized dict mapping trial_id (int) to
+          array of shape ``(n_windows, 310)`` where 310 = 62ch × 5bands.
+        - ``label``: pickle-serialized dict mapping trial_id to
+          per-window label arrays.
+
+        Returns:
+            de: ``(total_windows, 62, 5)``
+            labels: ``(total_windows,)``
+        """
+        npz = np.load(str(npz_path), allow_pickle=True)
+
+        data_raw = npz["data"]
+        if data_raw.shape == ():
+            data_dict = pickle.loads(data_raw.item())
+        elif hasattr(data_raw, "item"):
+            data_dict = data_raw.item()
+        else:
+            data_dict = data_raw
+
+        label_raw = npz["label"]
+        if label_raw.shape == ():
+            label_dict = pickle.loads(label_raw.item())
+        elif hasattr(label_raw, "item"):
+            label_dict = label_raw.item()
+        else:
+            label_dict = label_raw
+
+        de_list: list[np.ndarray] = []
+        lbl_list: list[np.ndarray] = []
+
+        for trial_id in range(_N_TOTAL_TRIALS):
+            trial_de = np.asarray(data_dict[trial_id], dtype=np.float64)
+            n_windows = trial_de.shape[0]
+            de_reshaped = trial_de.reshape(n_windows, _N_EEG_CH, _N_BANDS)
+            de_list.append(de_reshaped)
+
+            trial_lbl = np.asarray(label_dict[trial_id], dtype=np.int64)
+            if trial_lbl.ndim == 0:
+                trial_lbl = np.full(n_windows, int(trial_lbl), dtype=np.int64)
+            elif len(trial_lbl) != n_windows:
+                trial_lbl = np.full(n_windows, int(trial_lbl[0]), dtype=np.int64)
+            lbl_list.append(trial_lbl)
+
+        de = np.concatenate(de_list, axis=0)
+        labels = np.concatenate(lbl_list, axis=0)
+        return de, labels
+
+    # ------------------------------------------------------------------
+    # MAT loading (fallback)
+    # ------------------------------------------------------------------
+
     def _find_mat(self, subject_id: int, session: int) -> Path:
-        """Resolve the ``.mat`` path for a given subject/session pair."""
         patterns = [
             self.root / f"{subject_id}" / f"{session}.mat",
             self.root / f"sub{subject_id}" / f"session{session}.mat",
@@ -174,16 +249,8 @@ class SEEDVDataset(BaseDataset):
             f"under {self.root}. Tried: {[str(p) for p in patterns]}"
         )
 
-    def _load_de_features(self, mat_path: Path) -> tuple[np.ndarray, np.ndarray]:
-        """Load pre-computed DE features from a ``.mat`` file.
-
-        Handles both numeric arrays and MATLAB cell arrays (``object`` dtype)
-        for the ``de_LDS`` variable.
-
-        Returns:
-            data: ``(n_windows, n_channels, n_bands)``
-            labels: ``(n_windows,)``
-        """
+    def _load_de_features_mat(self, mat_path: Path) -> tuple[np.ndarray, np.ndarray]:
+        """Load pre-computed DE features from a ``.mat`` file."""
         mat = loadmat(str(mat_path), squeeze_me=True)
 
         de_key = None
@@ -204,20 +271,17 @@ class SEEDVDataset(BaseDataset):
             for i in range(len(raw_de)):
                 cell = np.asarray(raw_de[i], dtype=np.float64)
                 if cell.ndim == 2:
-                    # (n_channels, n_bands) — single window per trial
                     trials.append(cell[np.newaxis, ...])
                 elif cell.ndim == 3:
-                    # (n_channels, n_bands, n_windows) → transpose
                     trials.append(np.transpose(cell, (2, 0, 1)))
                 else:
-                    trials.append(cell.reshape(-1, 62, 5))
+                    trials.append(cell.reshape(-1, _N_EEG_CH, _N_BANDS))
             de = np.concatenate(trials, axis=0)
         else:
             de = np.asarray(raw_de, dtype=np.float64)
             if de.ndim == 2:
                 de = de[np.newaxis, ...]
-            elif de.ndim == 3 and de.shape[0] == 62:
-                # (n_channels, n_bands, n_windows) → (n_windows, n_channels, n_bands)
+            elif de.ndim == 3 and de.shape[0] == _N_EEG_CH:
                 de = np.transpose(de, (2, 0, 1))
 
         labels_raw = mat.get("labels", mat.get("label", None))
@@ -230,7 +294,8 @@ class SEEDVDataset(BaseDataset):
                 labels = np.repeat(labels, de.shape[0])
             else:
                 logger.warning(
-                    "Label count (%d) != DE window count (%d) in %s; truncating",
+                    "Label count (%d) != DE window count (%d) "
+                    "in %s; truncating",
                     len(labels),
                     de.shape[0],
                     mat_path,
@@ -241,16 +306,11 @@ class SEEDVDataset(BaseDataset):
         return de, labels
 
     def _load_raw_eeg(self, mat_path: Path) -> tuple[np.ndarray, np.ndarray]:
-        """Load raw EEG signals from a ``.mat`` file and band-pass filter.
-
-        Returns:
-            data: ``(n_trials, n_channels, n_samples)``
-            labels: ``(n_trials,)``
-        """
+        """Load raw EEG signals from a ``.mat`` file and band-pass filter."""
         mat = loadmat(str(mat_path), squeeze_me=True)
 
         data_keys = [
-            k for k in mat if not k.startswith("__") and k != "labels" and k != "label"
+            k for k in mat if not k.startswith("__") and k not in ("labels", "label")
         ]
         trials: list[np.ndarray] = []
         for key in sorted(data_keys):
@@ -287,15 +347,23 @@ class SEEDVDataset(BaseDataset):
 
         return data_arr, labels
 
+    # ------------------------------------------------------------------
+    # BaseDataset interface
+    # ------------------------------------------------------------------
+
     def read_raw(self, subject_id: int) -> dict[str, np.ndarray]:
-        """Load SEED-V data for one subject across selected sessions.
+        """Load SEED-V data for one subject.
 
-        Args:
-            subject_id: 1-based subject identifier (1-16).
-
-        Returns:
-            Dict with modality arrays and a ``'labels'`` key.
+        Tries NPZ first (``EEG_DE_features/{id}_123.npz``), then falls
+        back to per-session ``.mat`` files.
         """
+        npz_path = self._find_npz(subject_id)
+        if npz_path is not None and self.use_de_features:
+            logger.info("Loading %s via NPZ", npz_path)
+            de, labels = self._load_npz(npz_path)
+            self._pre_extracted = True
+            return {"eeg": de, "labels": labels}
+
         all_eeg: list[np.ndarray] = []
         all_eog: list[np.ndarray] = []
         all_labels: list[np.ndarray] = []
@@ -305,7 +373,7 @@ class SEEDVDataset(BaseDataset):
             logger.info("Loading %s", mat_path)
 
             if self.use_de_features:
-                data, labels = self._load_de_features(mat_path)
+                data, labels = self._load_de_features_mat(mat_path)
                 all_eeg.append(data)
             else:
                 data, labels = self._load_raw_eeg(mat_path)
@@ -323,15 +391,13 @@ class SEEDVDataset(BaseDataset):
             else:
                 min_t = min(a.shape[2] for a in all_eeg)
                 result["eeg"] = np.concatenate(
-                    [a[:, :, :min_t] for a in all_eeg],
-                    axis=0,
+                    [a[:, :, :min_t] for a in all_eeg], axis=0,
                 )
 
         if all_eog:
             min_t = min(a.shape[2] for a in all_eog)
             result["eog"] = np.concatenate(
-                [a[:, :, :min_t] for a in all_eog],
-                axis=0,
+                [a[:, :, :min_t] for a in all_eog], axis=0,
             )
 
         result["labels"] = np.concatenate(all_labels, axis=0)

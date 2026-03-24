@@ -13,6 +13,8 @@ dataset:
   overlap: 0.5
   modalities: [eeg]
   label_axis: five_class
+  params:
+    use_de_features: true
 
 feature_pipeline:
   steps:
