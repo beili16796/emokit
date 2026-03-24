@@ -27,10 +27,38 @@ from emokit.utils import EmoKitDataError
 logger = logging.getLogger(__name__)
 
 _EEG_CHANNELS: list[str] = [
-    "Fp1", "AF3", "F3", "F7", "FC5", "FC1", "C3", "T7",
-    "CP5", "CP1", "P3", "P7", "PO3", "O1", "Oz", "Pz",
-    "Fp2", "AF4", "F4", "F8", "FC6", "FC2", "C4", "T8",
-    "CP6", "CP2", "P4", "P8", "PO4", "O2", "Fz", "Cz",
+    "Fp1",
+    "AF3",
+    "F3",
+    "F7",
+    "FC5",
+    "FC1",
+    "C3",
+    "T7",
+    "CP5",
+    "CP1",
+    "P3",
+    "P7",
+    "PO3",
+    "O1",
+    "Oz",
+    "Pz",
+    "Fp2",
+    "AF4",
+    "F4",
+    "F8",
+    "FC6",
+    "FC2",
+    "C4",
+    "T8",
+    "CP6",
+    "CP2",
+    "P4",
+    "P8",
+    "PO4",
+    "O2",
+    "Fz",
+    "Cz",
 ]
 
 _ORIGINAL_FS: float = 256.0
@@ -145,7 +173,9 @@ class MAHNOBHCIDataset(BaseDataset):
         return labels_map
 
     def _load_csv_signal(
-        self, subject_id: int, modality: str,
+        self,
+        subject_id: int,
+        modality: str,
     ) -> list[np.ndarray]:
         """Load all trial CSVs for one subject and modality.
 
@@ -234,7 +264,8 @@ class MAHNOBHCIDataset(BaseDataset):
                 ecg_processed.append(ecg)
             min_t_ecg = min(e.shape[1] for e in ecg_processed)
             result["ecg"] = np.stack(
-                [e[:, :min_t_ecg] for e in ecg_processed[:n_trials]], axis=0,
+                [e[:, :min_t_ecg] for e in ecg_processed[:n_trials]],
+                axis=0,
             )
 
         # GSR
@@ -249,7 +280,8 @@ class MAHNOBHCIDataset(BaseDataset):
                 gsr_processed.append(gsr)
             min_t_gsr = min(e.shape[1] for e in gsr_processed)
             result["gsr"] = np.stack(
-                [e[:, :min_t_gsr] for e in gsr_processed[:n_trials]], axis=0,
+                [e[:, :min_t_gsr] for e in gsr_processed[:n_trials]],
+                axis=0,
             )
 
         return result
