@@ -254,10 +254,10 @@ class BiDAEModel(BaseModel):
             for x1b, x2b, yb in train_loader:
                 optimizer.zero_grad()
                 logits, z1, z2, x1_recon, x2_recon = net(x1b, x2b)
+                recon = mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b)
                 loss = (
                     ce_loss(logits, yb)
-                    + self.lambda_recon
-                    * (mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b))
+                    + self.lambda_recon * recon
                     + self.mu_align * mse_loss(z1, z2)
                 )
                 loss.backward()

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from emokit.datasets.base import (
-    _REGISTRY,
+    _REGISTRY,  # noqa: F401
     BaseDataset,
     DatasetRegistry,
     load_dataset,

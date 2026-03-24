@@ -248,7 +248,8 @@ class SEEDVDataset(BaseDataset):
         mat = loadmat(str(mat_path), squeeze_me=True)
 
         data_keys = [
-            k for k in mat if not k.startswith("__") and k != "labels" and k != "label"
+            k for k in mat
+            if not k.startswith("__") and k != "labels" and k != "label"
         ]
         trials: list[np.ndarray] = []
         for key in sorted(data_keys):
