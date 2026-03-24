@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from emokit.evaluation.protocols import (
     LOSOEvaluator,
+    MultiModelLOSOEvaluator,
     ResultLogger,
     SessionEvaluator,
     SubjectDependentEvaluator,
@@ -16,6 +17,7 @@ from emokit.evaluation.protocols import (
 
 __all__ = [
     "LOSOEvaluator",
+    "MultiModelLOSOEvaluator",
     "ResultLogger",
     "SessionEvaluator",
     "SubjectDependentEvaluator",

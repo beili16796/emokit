@@ -2,12 +2,12 @@
 # Copyright (c) 2024 EmoKit Contributors
 # See LICENSE for full text.
 
-"""Bi-modal Denoising Autoencoder (BiDAE) with shared bottleneck for emotion recognition."""
+"""Bi-modal Denoising Autoencoder (BiDAE) with shared bottleneck for emotion
+recognition."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -61,13 +61,17 @@ class _BiDAE(nn.Module):
         self.encoder1 = _MLP([n_feat1, 512, 256, bottleneck_dim])
         self.decoder1 = _MLP([bottleneck_dim, 256, 512, n_feat1])
         self.encoder2 = nn.Sequential(
-            nn.Linear(n_feat2, 64), nn.ReLU(),
-            nn.Linear(64, 128), nn.ReLU(),
+            nn.Linear(n_feat2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 128),
+            nn.ReLU(),
             nn.Linear(128, bottleneck_dim),
         )
         self.decoder2 = nn.Sequential(
-            nn.Linear(bottleneck_dim, 128), nn.ReLU(),
-            nn.Linear(128, 64), nn.ReLU(),
+            nn.Linear(bottleneck_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
             nn.Linear(64, n_feat2),
         )
         self.classifier = nn.Linear(bottleneck_dim, n_classes)
@@ -113,11 +117,15 @@ class BiDAEModel(BaseModel):
     def __init__(
         self,
         n_classes: int = 3,
-        n_feat1: int = 310,
-        n_feat2: int = 32,
+        n_feat1: int | None = None,
+        n_feat2: int | None = None,
+        n_feat_mod1: int = 310,
+        n_feat_mod2: int = 32,
         bottleneck_dim: int = 128,
         lambda_recon: float = 0.1,
-        mu_align: float = 0.01,
+        lambda_rec: float | None = None,
+        mu_align: float | None = None,
+        lambda_align: float = 0.01,
         lr: float = 1e-3,
         batch_size: int = 64,
         n_epochs: int = 100,
@@ -125,11 +133,11 @@ class BiDAEModel(BaseModel):
         seed: int | None = None,
     ) -> None:
         super().__init__(n_classes=n_classes, device=device)
-        self.n_feat1 = n_feat1
-        self.n_feat2 = n_feat2
+        self.n_feat1 = n_feat1 if n_feat1 is not None else n_feat_mod1
+        self.n_feat2 = n_feat2 if n_feat2 is not None else n_feat_mod2
         self.bottleneck_dim = bottleneck_dim
-        self.lambda_recon = lambda_recon
-        self.mu_align = mu_align
+        self.lambda_recon = lambda_rec if lambda_rec is not None else lambda_recon
+        self.mu_align = mu_align if mu_align is not None else lambda_align
         self.lr = lr
         self.batch_size = batch_size
         self.n_epochs = n_epochs
@@ -145,17 +153,49 @@ class BiDAEModel(BaseModel):
         ).to(self.device)
 
     def _prepare(
-        self, X: dict[str, np.ndarray]
+        self, X: dict[str, np.ndarray] | np.ndarray | torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        x1 = torch.as_tensor(X["mod1"], dtype=torch.float32).to(self.device)
-        x2 = torch.as_tensor(X["mod2"], dtype=torch.float32).to(self.device)
+        if isinstance(X, dict):
+            x1 = torch.as_tensor(X["mod1"], dtype=torch.float32).to(self.device)
+            x2 = torch.as_tensor(X["mod2"], dtype=torch.float32).to(self.device)
+        elif isinstance(X, torch.Tensor):
+            x1 = X.to(self.device)
+            x2 = torch.zeros(X.shape[0], self.n_feat2, device=self.device)
+        else:
+            x1 = torch.as_tensor(X, dtype=torch.float32).to(self.device)
+            x2 = torch.zeros(X.shape[0], self.n_feat2, device=self.device)
         return x1, x2
+
+    def compute_loss(
+        self,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
+        y: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute the full BiDAE loss (CE + recon + alignment).
+
+        Args:
+            x1: Modality-1 features ``(B, n_feat1)``.
+            x2: Modality-2 features ``(B, n_feat2)``.
+            y: Class labels ``(B,)``.
+
+        Returns:
+            Scalar loss tensor.
+        """
+        logits, z1, z2, x1_recon, x2_recon = self.network(x1, x2)
+        ce = nn.functional.cross_entropy(logits, y)
+        mse = nn.functional.mse_loss
+        return (
+            ce
+            + self.lambda_recon * (mse(x1_recon, x1) + mse(x2_recon, x2))
+            + self.mu_align * mse(z1, z2)
+        )
 
     def fit(
         self,
-        X_train: dict[str, np.ndarray],
+        X_train: dict[str, np.ndarray] | np.ndarray,
         y_train: np.ndarray,
-        X_val: dict[str, np.ndarray] | None = None,
+        X_val: dict[str, np.ndarray] | np.ndarray | None = None,
         y_val: np.ndarray | None = None,
     ) -> dict[str, list[float]]:
         """Train the BiDAE model.
@@ -205,7 +245,8 @@ class BiDAEModel(BaseModel):
                 logits, z1, z2, x1_recon, x2_recon = net(x1b, x2b)
                 loss = (
                     ce_loss(logits, yb)
-                    + self.lambda_recon * (mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b))
+                    + self.lambda_recon
+                    * (mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b))
                     + self.mu_align * mse_loss(z1, z2)
                 )
                 loss.backward()
@@ -235,7 +276,7 @@ class BiDAEModel(BaseModel):
         return history
 
     @torch.no_grad()
-    def predict(self, X: dict[str, np.ndarray]) -> np.ndarray:
+    def predict(self, X: dict[str, np.ndarray] | np.ndarray) -> np.ndarray:
         """Return class predictions.
 
         Args:
@@ -250,7 +291,7 @@ class BiDAEModel(BaseModel):
         return logits.argmax(dim=-1).cpu().numpy()
 
     @torch.no_grad()
-    def predict_proba(self, X: dict[str, np.ndarray]) -> np.ndarray:
+    def predict_proba(self, X: dict[str, np.ndarray] | np.ndarray) -> np.ndarray:
         """Return softmax probabilities.
 
         Args:

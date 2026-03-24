@@ -2,12 +2,12 @@
 # Copyright (c) 2024 EmoKit Contributors
 # See LICENSE for full text.
 
-"""Prototype-Representation / Pairwise-Loss (PR-PL) model for cross-subject EEG emotion recognition."""
+"""Prototype-Representation / Pairwise-Loss (PR-PL) model for cross-subject
+EEG emotion recognition."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -66,17 +66,14 @@ class _PRPL(nn.Module):
             nn.ReLU(),
         )
 
-        self.register_buffer(
-            "prototypes", torch.randn(n_classes, prototype_dim) * 0.02
-        )
-        self.register_buffer(
-            "_proto_counts", torch.zeros(n_classes, dtype=torch.long)
-        )
+        self.register_buffer("prototypes", torch.randn(n_classes, prototype_dim) * 0.02)
+        self.register_buffer("_proto_counts", torch.zeros(n_classes, dtype=torch.long))
 
         self.classifier = nn.Linear(prototype_dim, n_classes)
 
         self.domain_disc = nn.Sequential(
-            nn.Linear(prototype_dim, 64), nn.ReLU(),
+            nn.Linear(prototype_dim, 64),
+            nn.ReLU(),
             nn.Linear(64, 2),
         )
 
@@ -106,8 +103,11 @@ class _PRPL(nn.Module):
                 if count == 0:
                     self.prototypes[c] = z_c
                 else:
-                    momentum = 1.0 / (count + 1)
-                    self.prototypes[c] = (1 - momentum) * self.prototypes[c] + momentum * z_c
+                    denom = count + 1
+                    momentum = 1.0 / denom
+                    self.prototypes[c] = (1 - momentum) * self.prototypes[
+                        c
+                    ] + momentum * z_c
                 self._proto_counts[c] += mask.sum()
 
     def pairwise_loss(
@@ -172,7 +172,9 @@ class _PRPL(nn.Module):
         pred_s = self.domain_disc(z_s_rev)
         pred_t = self.domain_disc(z_t_rev)
 
-        label_s = torch.zeros(z_source.size(0), dtype=torch.long, device=z_source.device)
+        label_s = torch.zeros(
+            z_source.size(0), dtype=torch.long, device=z_source.device
+        )
         label_t = torch.ones(z_target.size(0), dtype=torch.long, device=z_target.device)
 
         loss = F.cross_entropy(pred_s, label_s) + F.cross_entropy(pred_t, label_t)
@@ -193,7 +195,8 @@ class _PRPL(nn.Module):
 
 @registry.register("PR-PL")
 class PRPLModel(BaseModel):
-    """Prototype-Representation / Pairwise-Loss model with domain adversarial adaptation.
+    """Prototype-Representation / Pairwise-Loss model with domain adversarial
+    adaptation.
 
     Learns per-class prototypes (updated as running mean) in a shared embedding
     space with a contrastive pairwise loss.  Supports cross-subject LOSO via
@@ -239,6 +242,10 @@ class PRPLModel(BaseModel):
             lambda_adv=self.lambda_adv,
         ).to(self.device)
 
+    def get_attention_weights(self) -> None:
+        """PR-PL is unimodal — no attention weights."""
+        return None
+
     def fit(
         self,
         X_train: np.ndarray,
@@ -247,6 +254,7 @@ class PRPLModel(BaseModel):
         y_val: np.ndarray | None = None,
         subject_ids: np.ndarray | None = None,
         X_target: np.ndarray | None = None,
+        n_epochs: int | None = None,
     ) -> dict[str, list[float]]:
         """Train the PR-PL model.
 
@@ -262,6 +270,8 @@ class PRPLModel(BaseModel):
         Returns:
             Training history dict.
         """
+        actual_epochs = n_epochs if n_epochs is not None else self.n_epochs
+
         if self.seed is not None:
             torch.manual_seed(self.seed)
 
@@ -283,7 +293,9 @@ class PRPLModel(BaseModel):
         if X_target is not None:
             X_tgt = torch.as_tensor(X_target, dtype=torch.float32).to(self.device)
             target_ds = TensorDataset(X_tgt)
-            target_loader = DataLoader(target_ds, batch_size=self.batch_size, shuffle=True)
+            target_loader = DataLoader(
+                target_ds, batch_size=self.batch_size, shuffle=True
+            )
 
         val_loader = None
         if X_val is not None and y_val is not None:
@@ -294,7 +306,7 @@ class PRPLModel(BaseModel):
 
         history: dict[str, list[float]] = {"train_loss": [], "val_acc": []}
 
-        for epoch in tqdm(range(self.n_epochs), desc="PR-PL Training", leave=False):
+        for epoch in tqdm(range(actual_epochs), desc="PR-PL Training", leave=False):
             net.train()
             total_loss = 0.0
             n_batches = 0
@@ -311,15 +323,17 @@ class PRPLModel(BaseModel):
 
                 if target_iter is not None:
                     try:
-                        (x_tgt_b,) = next(target_iter)
+                        x_tgt_b = next(target_iter)[0]
                     except StopIteration:
                         target_iter = iter(target_loader)
-                        (x_tgt_b,) = next(target_iter)
+                        x_tgt_b = next(target_iter)[0]
 
                     z_tgt = net.encode(x_tgt_b)
-                    adv_progress = epoch / max(self.n_epochs - 1, 1)
+                    adv_progress = epoch / max(actual_epochs - 1, 1)
                     alpha = 2.0 / (1.0 + np.exp(-10.0 * adv_progress)) - 1.0
-                    loss = loss + self.lambda_adv * net.domain_adversarial_loss(z, z_tgt, alpha)
+                    loss = loss + self.lambda_adv * net.domain_adversarial_loss(
+                        z, z_tgt, alpha
+                    )
                     loss = loss + self.lambda_pair * net.pairwise_loss_pseudo(z_tgt)
 
                 loss.backward()

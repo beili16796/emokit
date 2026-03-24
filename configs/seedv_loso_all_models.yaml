@@ -1,0 +1,71 @@
+_base_: standard_protocol.yaml
+
+experiment:
+  name: seedv_loso_all_models
+  seed: 42
+  device: cpu
+
+dataset:
+  name: SEED-V
+  root: ${EMOKIT_DATA_ROOT}/SEED-V
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+  label_axis: five_class
+
+feature_pipeline:
+  steps:
+    - name: EEGNormalizer
+      params: {}
+
+model_defaults:
+  n_classes: 5
+
+models_to_run:
+  - name: CNN-LSTM
+    params:
+      n_classes: 5
+      input_type: de
+      n_channels: 62
+      n_epochs: 50
+  - name: BiDAE
+    params:
+      n_classes: 5
+      n_feat1: 310
+      n_feat2: 3
+      n_epochs: 50
+  - name: DGCNN
+    params:
+      n_classes: 5
+      n_channels: 62
+      n_bands: 5
+      K: 2
+      n_epochs: 50
+  - name: Transformer-MM
+    params:
+      n_classes: 5
+      n_channels: 62
+      n_bands: 5
+      d_model: 64
+      n_epochs: 50
+  - name: DGCCA-AM
+    params:
+      n_classes: 5
+      n_feat_eeg: 310
+      n_feat_gsr: 3
+      n_feat_ecg: 5
+      n_epochs: 50
+  - name: PR-PL
+    params:
+      n_classes: 5
+      n_feat: 310
+      n_epochs: 50
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/seedv_loso
+  save_checkpoints: true

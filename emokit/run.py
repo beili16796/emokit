@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 from typing import Any
 
 from emokit.evaluation.config import ConfigLoader, FullConfig
@@ -29,7 +28,9 @@ _PROTOCOL_MAP: dict[str, type] = {
 }
 
 
-def _build_evaluator(cfg: FullConfig) -> LOSOEvaluator | SubjectDependentEvaluator | SessionEvaluator:
+def _build_evaluator(
+    cfg: FullConfig,
+) -> LOSOEvaluator | SubjectDependentEvaluator | SessionEvaluator:
     """Instantiate dataset, feature pipeline, and the correct evaluator."""
     from emokit.datasets import load_dataset
     from emokit.features.base import GLOBAL_REGISTRY as TRANSFORM_REGISTRY
@@ -46,6 +47,8 @@ def _build_evaluator(cfg: FullConfig) -> LOSOEvaluator | SubjectDependentEvaluat
         ds_kwargs["modalities"] = cfg.dataset.modalities
     if cfg.dataset.label_axis is not None:
         ds_kwargs["label_axis"] = cfg.dataset.label_axis
+    if hasattr(cfg.dataset, "params") and cfg.dataset.params:
+        ds_kwargs.update(cfg.dataset.params)
 
     dataset = load_dataset(cfg.dataset.name, **ds_kwargs)
 
@@ -118,10 +121,36 @@ def main() -> None:
         type=str,
         help="Path to the experiment YAML configuration file.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Use synthetic data regardless of config.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Override output directory.",
+    )
     args = parser.parse_args()
 
     logger.info("Loading config from %s", args.config)
     cfg = ConfigLoader.load(args.config)
+
+    if args.dry_run:
+        cfg = cfg.model_copy(
+            update={
+                "dataset": cfg.dataset.model_copy(
+                    update={"name": "SYNTHETIC", "root": None}
+                )
+            }
+        )
+    if args.output_dir:
+        cfg = cfg.model_copy(
+            update={
+                "output": cfg.output.model_copy(update={"results_dir": args.output_dir})
+            }
+        )
 
     set_seed(cfg.experiment.seed)
     logger.info("Experiment: %s  seed=%d", cfg.experiment.name, cfg.experiment.seed)

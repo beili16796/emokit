@@ -21,11 +21,9 @@ from emokit.evaluation.config import (
     DatasetConfig,
     EvaluationConfig,
     ExperimentConfig,
-    FeaturePipelineConfig,
     FeatureStepConfig,
     FullConfig,
     ModelConfig,
-    OutputConfig,
 )
 from emokit.evaluation.protocols import (
     LOSOEvaluator,
@@ -34,7 +32,7 @@ from emokit.evaluation.protocols import (
     compute_metrics,
 )
 from emokit.features.base import BaseTransform, FeaturePipeline
-from emokit.models.base import BaseModel, build_model, registry
+from emokit.models.base import BaseModel, registry
 from emokit.utils import EmoKitConfigError, set_seed
 
 logger = logging.getLogger(__name__)
@@ -43,6 +41,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Mock dataset: 5 subjects, 20 trials each, 2 classes, 10-feature vectors
 # ---------------------------------------------------------------------------
+
 
 class SyntheticDataset(BaseDataset):
     """Tiny synthetic dataset for testing evaluation protocols."""
@@ -93,15 +92,14 @@ class SyntheticDataset(BaseDataset):
 # Sklearn LogisticRegression wrapped as BaseModel
 # ---------------------------------------------------------------------------
 
+
 @registry.register("_TestLogReg")
 class LogRegModel(BaseModel):
     """Logistic regression wrapper for testing."""
 
     def __init__(self, n_classes: int = 2, **kwargs: Any) -> None:
         super().__init__(n_classes=n_classes, device="cpu")
-        self._clf = LogisticRegression(
-            max_iter=200, solver="lbfgs", multi_class="multinomial"
-        )
+        self._clf = LogisticRegression(max_iter=200, solver="lbfgs")
 
     def fit(
         self,
@@ -132,6 +130,7 @@ class LogRegModel(BaseModel):
 # ---------------------------------------------------------------------------
 # Identity transform for pipeline
 # ---------------------------------------------------------------------------
+
 
 class IdentityTransform(BaseTransform):
     """Pass-through transform."""
@@ -486,7 +485,7 @@ class TestResultLogger:
     def test_creates_results_dir(self, tmp_path: Path) -> None:
         target = tmp_path / "deep" / "nested" / "dir"
         assert not target.exists()
-        rl = ResultLogger(results_dir=str(target))
+        _rl = ResultLogger(results_dir=str(target))
         assert target.exists()
 
 
@@ -538,6 +537,7 @@ class TestEdgeCases:
 
     def test_reproducibility(self) -> None:
         """Two runs with the same seed must yield identical results."""
+
         def _run(seed: int) -> dict[str, Any]:
             ds = SyntheticDataset(n_subjects=3, n_trials_per_subject=20, seed=seed)
             pipeline = FeaturePipeline([("id", IdentityTransform())])
@@ -579,3 +579,48 @@ class TestPydanticModels:
     def test_feature_step_default_params(self) -> None:
         step = FeatureStepConfig(name="Foo")
         assert step.params == {}
+
+
+# ---------------------------------------------------------------------------
+# Paper-aligned evaluation tests (P0-6)
+# ---------------------------------------------------------------------------
+
+
+class TestLOSOPerSubjectRawPreds:
+    """Verify per_subject_raw_preds is in LOSO results."""
+
+    def test_raw_preds_in_results(self) -> None:
+        ds = SyntheticDataset(n_subjects=3, n_trials_per_subject=20, seed=42)
+        pipeline = FeaturePipeline([("identity", IdentityTransform())])
+        evaluator = LOSOEvaluator(
+            dataset=ds,
+            feature_pipeline=pipeline,
+            model_config={"n_classes": 2},
+            model_name="_TestLogReg",
+            seed=42,
+        )
+        results = evaluator.run()
+        assert "per_subject_raw_preds" in results
+        for sid in results["per_subject"]:
+            assert sid in results["per_subject_raw_preds"]
+            raw = results["per_subject_raw_preds"][sid]
+            assert "y_true" in raw
+            assert "y_pred" in raw
+            assert len(raw["y_true"]) == len(raw["y_pred"])
+
+
+class TestWilcoxonScriptRuns:
+    """Script must run without error on synthetic input."""
+
+    def test_wilcoxon_script_runs(self, tmp_path: Path) -> None:
+        from emokit.scripts.statistical_analysis import run_pairwise_wilcoxon
+
+        mock = {
+            m: {str(s): {"accuracy": float(np.random.rand())} for s in range(10)}
+            for m in ["CNN-LSTM", "DGCNN", "PR-PL"]
+        }
+        p = tmp_path / "mock.json"
+        p.write_text(json.dumps(mock), encoding="utf-8")
+        results = run_pairwise_wilcoxon(str(p), alpha=0.05)
+        assert "CNN-LSTM vs DGCNN" in results
+        assert "p" in results["CNN-LSTM vs DGCNN"]

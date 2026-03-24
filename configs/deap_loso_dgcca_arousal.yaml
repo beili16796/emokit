@@ -1,0 +1,44 @@
+_base_: standard_protocol.yaml
+
+experiment:
+  name: deap_loso_dgcca_arousal
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DEAP
+  root: ${EMOKIT_DATA_ROOT}/DEAP
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg, gsr, ecg]
+  label_axis: arousal
+  params:
+    label_threshold: 5.0
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params: {fs: 128}
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: DGCCA-AM
+  params:
+    n_classes: 2
+    n_feat_eeg: 160
+    n_feat_gsr: 3
+    n_feat_ecg: 5
+    hidden_dim: 128
+    lr: 0.001
+    batch_size: 64
+    n_epochs: 50
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/deap_loso_dgcca_arousal
+  save_checkpoints: true
