@@ -61,16 +61,24 @@ def main() -> None:
 
     if not args.ours:
         logger.info(
-            "No --ours file provided. This script is a template.\n"
-            "Expected JSON shape (example): "
-            '{"mean": {"accuracy": 72.0}, "std": {"accuracy": 2.1}} '
-            "or your own schema — adjust mapping below.",
+            "No results found. Run experiments first:\n"
+            "  python scripts/run_all_experiments.py --deap-root <PATH> ...\n"
+            "\n"
+            "Then re-run:\n"
+            "  python scripts/reproduce_baselines.py --ours results/full_run/results_all.json"
         )
         for metric, paper_val in paper.items():
             logger.info("Paper %s %s: %.1f (target ±%.1f%%)", args.model, metric, paper_val, TOLERANCE_PCT)
         sys.exit(0)
 
     ours_path = Path(args.ours)
+    if not ours_path.exists():
+        logger.info(
+            "No results found. Run experiments first:\n"
+            "  python scripts/run_all_experiments.py --deap-root <PATH> ..."
+        )
+        sys.exit(0)
+
     data = _load_json(ours_path)
     # TODO: map your JSON to metric names (deap_valence / deap_arousal).
     ours_map = {

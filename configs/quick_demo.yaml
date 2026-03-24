@@ -5,7 +5,7 @@ experiment:
 
 dataset:
   name: SYNTHETIC
-  root: null
+  root: /tmp/emokit_synthetic
   subjects: null
   window_sec: 4.0
   overlap: 0.0
@@ -27,7 +27,7 @@ feature_pipeline:
       params: {}
 
 model:
-  name: DGCNN
+  name: PR-PL
   params:
     n_channels: 32
     n_bands: 5
