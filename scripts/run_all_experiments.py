@@ -317,6 +317,7 @@ def _run_single(
             class _Identity(_BT):
                 def fit(self, X, y=None):
                     return self
+
                 def transform(self, X):
                     return X
 
@@ -331,10 +332,12 @@ def _run_single(
                 steps.append(("flatten", _FlattenTo2D()))
             pipeline = FeaturePipeline(steps)
     else:
-        pipeline = FeaturePipeline([
-            ("de", DEExtractor(fs=int(fs))),
-            ("norm", EEGNormalizer()),
-        ])
+        pipeline = FeaturePipeline(
+            [
+                ("de", DEExtractor(fs=int(fs))),
+                ("norm", EEGNormalizer()),
+            ]
+        )
 
     evaluator = LOSOEvaluator(
         dataset=ds,

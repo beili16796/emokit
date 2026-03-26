@@ -79,12 +79,10 @@ def main() -> None:
 
         if eeg is not None:
             eeg_shape = tuple(eeg.shape)
-            assert eeg.shape[1] == 32, (
-                f"Expected 32 EEG channels, got {eeg.shape[1]}"
-            )
-            assert not np.isnan(eeg[0]).any(), (
-                f"NaN found in subject {sid}, trial 0 EEG"
-            )
+            assert eeg.shape[1] == 32, f"Expected 32 EEG channels, got {eeg.shape[1]}"
+            assert not np.isnan(
+                eeg[0]
+            ).any(), f"NaN found in subject {sid}, trial 0 EEG"
 
             label_val = int(labels[0])
             logger.info(

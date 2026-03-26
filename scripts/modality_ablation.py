@@ -142,8 +142,10 @@ def run_ablation(
             class _ReshapeTo3D(BaseTransform):
                 def __init__(self, nc, ns):
                     self.nc, self.ns = nc, ns
+
                 def fit(self, X, y=None):
                     return self
+
                 def transform(self, X):
                     X = np.asarray(X)
                     return X.reshape(X.shape[0], self.nc, self.ns) if X.ndim == 2 else X
@@ -151,6 +153,7 @@ def run_ablation(
             class _FlattenTo2D(BaseTransform):
                 def fit(self, X, y=None):
                     return self
+
                 def transform(self, X):
                     X = np.asarray(X)
                     return X.reshape(X.shape[0], -1) if X.ndim == 3 else X

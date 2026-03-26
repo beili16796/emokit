@@ -92,19 +92,21 @@ EXPERIMENTS = [
 ]
 
 
-def _make_dry_run_cfg(cfg: Any, dataset_key: str) -> Any:
-    """Convert a real-data config into a fast synthetic dry-run config."""
+def _make_dry_run_cfg(cfg: Any, dataset_key: str, *, mock_run: bool = False) -> Any:
+    """Convert a real-data config into a fast synthetic dry-run config.
+
+    When *mock_run* is ``True``, further shrink all model dimensions to
+    the absolute minimum (1 epoch, tiny hidden dims) so the full
+    pipeline completes in seconds on CPU.
+    """
+    n_ch = 62 if dataset_key == "SEED-V" else 14 if dataset_key == "DREAMER" else 32
     dataset_update = {
         "name": "SYNTHETIC",
         "root": None,
         "params": {
             "n_subjects": 3,
-            "n_trials": 8,
-            "n_channels": (
-                62
-                if dataset_key == "SEED-V"
-                else 14 if dataset_key == "DREAMER" else 32
-            ),
+            "n_trials": 8 if not mock_run else 6,
+            "n_channels": n_ch,
             "n_classes": 5 if dataset_key == "SEED-V" else 2,
         },
     }
@@ -118,7 +120,13 @@ def _make_dry_run_cfg(cfg: Any, dataset_key: str) -> Any:
         )
     if cfg.model is not None:
         params = dict(cfg.model.params or {})
-        params["n_epochs"] = min(int(params.get("n_epochs", 2)), 2)
+        max_ep = 2 if not mock_run else 1
+        params["n_epochs"] = min(int(params.get("n_epochs", max_ep)), max_ep)
+        if mock_run:
+            params["batch_size"] = min(int(params.get("batch_size", 8)), 8)
+            for k in ("hidden_dim", "hidden_size", "d_model"):
+                if k in params:
+                    params[k] = min(int(params[k]), 16)
         cfg = cfg.model_copy(
             update={
                 "dataset": cfg.dataset.model_copy(update=dataset_update),
@@ -142,8 +150,9 @@ def _make_dry_run_cfg(cfg: Any, dataset_key: str) -> Any:
 
 
 def _override_roots(cfg: Any, args: argparse.Namespace, dataset_key: str) -> Any:
-    if args.dry_run:
-        return _make_dry_run_cfg(cfg, dataset_key)
+    mock = getattr(args, "mock_run", False)
+    if args.dry_run or mock:
+        return _make_dry_run_cfg(cfg, dataset_key, mock_run=mock)
 
     dataset_root = None
     if dataset_key == "DEAP":
@@ -385,6 +394,11 @@ def main() -> None:
     parser.add_argument("--dreamer-root", default=None)
     parser.add_argument("--output-dir", default="results/paper_experiments")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--mock-run",
+        action="store_true",
+        help="Ultra-minimal CPU run: 1 epoch, tiny dims, for pipeline validation.",
+    )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--skip-errors", action="store_true")
     run_all(parser.parse_args())

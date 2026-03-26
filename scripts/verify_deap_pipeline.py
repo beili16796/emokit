@@ -86,9 +86,9 @@ def main() -> None:
             band_means,
         )
     else:
-        assert band_means[0] < band_means[4], (
-            "DE band ordering anomaly (delta vs gamma)"
-        )
+        assert (
+            band_means[0] < band_means[4]
+        ), "DE band ordering anomaly (delta vs gamma)"
 
     greek = ["delta", "theta", "alpha", "beta", "gamma"]
     summary = {
