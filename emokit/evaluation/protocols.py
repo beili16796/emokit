@@ -1017,6 +1017,151 @@ def _run_from_full_config(cfg: Any, protocol_cls: type) -> dict[str, Any]:
     return evaluator.run()
 
 
+class CrossCorpusEvaluator:
+    """Cross-corpus generalisation evaluator.
+
+    Trains on *all* subjects of ``source_dataset`` and evaluates per-subject
+    on ``target_dataset``.  When the two corpora have different EEG montages,
+    channels are automatically aligned using the International 10-20 system.
+
+    This protocol is essential for validating domain generalisation claims
+    in affective computing papers (e.g. training on SEED → testing on DREAMER).
+
+    Args:
+        source_dataset: Dataset to train on (all subjects).
+        target_dataset: Dataset to evaluate on (per-subject metrics).
+        feature_pipeline: Shared feature extraction pipeline.
+        model_config: Config dict forwarded to the model constructor.
+        model_name: Registered model name.
+        seed: Global random seed.
+        val_fraction: Fraction of source data held out for validation.
+    """
+
+    def __init__(
+        self,
+        source_dataset: BaseDataset,
+        target_dataset: BaseDataset,
+        feature_pipeline: FeaturePipeline,
+        model_config: dict[str, Any],
+        model_name: str,
+        seed: int = 42,
+        val_fraction: float = 0.1,
+    ) -> None:
+        self.source_dataset = source_dataset
+        self.target_dataset = target_dataset
+        self.feature_pipeline = feature_pipeline
+        self.model_config = model_config
+        self.model_name = model_name
+        self.seed = seed
+        self.val_fraction = val_fraction
+
+    def _align_if_needed(
+        self, X: np.ndarray, src_names: list[str], tgt_names: list[str]
+    ) -> np.ndarray:
+        """Subset source channels to match target montage if different."""
+        if len(src_names) == len(tgt_names):
+            return X
+        from emokit.features.channel_align import subset_features
+
+        return subset_features(X, src_names, tgt_names)
+
+    def run(self) -> dict[str, Any]:
+        """Train on source corpus, evaluate per-subject on target.
+
+        Returns:
+            Dict with ``per_subject``, ``mean``, ``std``, ``config``.
+        """
+        set_seed(self.seed)
+        src_ch = self.source_dataset.get_channel_names("eeg")
+        tgt_ch = self.target_dataset.get_channel_names("eeg")
+        do_align = len(src_ch) != len(tgt_ch)
+
+        if do_align:
+            logger.info(
+                "Channel alignment: %d-ch source → %d-ch target",
+                len(src_ch),
+                len(tgt_ch),
+            )
+
+        # --- Collect source data ---
+        src_ids = self.source_dataset.get_subject_ids()
+        src_Xs: list[np.ndarray] = []
+        src_ys: list[np.ndarray] = []
+        for sid in src_ids:
+            raw = self.source_dataset.read_raw(sid)
+            eeg = raw.get("eeg")
+            if eeg is None or "labels" not in raw:
+                continue
+            if eeg.ndim == 3:
+                eeg = eeg.reshape(eeg.shape[0], -1)
+            src_Xs.append(eeg)
+            src_ys.append(np.asarray(raw["labels"]))
+
+        if not src_Xs:
+            raise EmoKitConfigError("No source data loaded")
+
+        X_src = np.concatenate(src_Xs, axis=0)
+        y_src = np.concatenate(src_ys, axis=0)
+
+        # --- Collect target data (per-subject) ---
+        tgt_ids = self.target_dataset.get_subject_ids()
+        tgt_data: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        for sid in tgt_ids:
+            raw = self.target_dataset.read_raw(sid)
+            eeg = raw.get("eeg")
+            if eeg is None or "labels" not in raw:
+                continue
+            if eeg.ndim == 3:
+                eeg = eeg.reshape(eeg.shape[0], -1)
+            tgt_data[sid] = (eeg, np.asarray(raw["labels"]))
+
+        # --- Feature pipeline ---
+        pipeline = _clone_pipeline(self.feature_pipeline)
+        X_src_feat = pipeline.fit_transform(X_src, y_src)
+
+        # Channel alignment on feature space
+        if do_align and X_src_feat.ndim >= 2:
+            X_src_feat = self._align_if_needed(X_src_feat, src_ch, tgt_ch)
+
+        # --- Train/val split ---
+        X_tr, y_tr, X_val, y_val = _stratified_val_split_any(
+            X_src_feat, y_src, self.val_fraction, self.seed
+        )
+
+        model = build_model(self.model_name, self.model_config)
+        model.fit(X_tr, y_tr, X_val, y_val)
+
+        # --- Evaluate per target subject ---
+        per_subject: dict[int, dict[str, Any]] = {}
+        for sid, (X_tgt_raw, y_tgt) in tgt_data.items():
+            X_tgt_feat = pipeline.transform(X_tgt_raw)
+            if do_align and X_tgt_feat.ndim >= 2:
+                X_tgt_feat = self._align_if_needed(X_tgt_feat, tgt_ch, tgt_ch)
+            y_pred = model.predict(X_tgt_feat)
+            metrics = compute_metrics(y_tgt, y_pred)
+            per_subject[sid] = metrics
+            logger.info(
+                "Target subject %d — acc=%.4f f1=%.4f",
+                sid,
+                metrics["accuracy"],
+                metrics["f1_macro"],
+            )
+
+        return _aggregate_results(
+            per_subject,
+            config={
+                "source_dataset": type(self.source_dataset).__name__,
+                "target_dataset": type(self.target_dataset).__name__,
+                "model_name": self.model_name,
+                "seed": self.seed,
+                "protocol": "cross_corpus",
+                "channel_alignment": do_align,
+                "source_channels": len(src_ch),
+                "target_channels": len(tgt_ch),
+            },
+        )
+
+
 def _json_default(obj: Any) -> Any:
     """JSON serialiser fallback for numpy types."""
     if isinstance(obj, np.integer):

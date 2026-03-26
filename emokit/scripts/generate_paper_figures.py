@@ -253,7 +253,7 @@ def fig5_radar_plot(
     import matplotlib.pyplot as plt
 
     models = ["CNN-LSTM", "BiDAE", "DGCNN", "Transformer-MM", "DGCCA-AM", "PR-PL"]
-    datasets = ["DEAP-V", "DEAP-A", "SEED-V", "DREAMER-V"]
+    datasets = ["DEAP-V", "DEAP-A", "SEED-V", "DREAMER-V", "Cross-Corp."]
 
     if dry_run:
         rng = np.random.default_rng(99)
@@ -268,11 +268,12 @@ def fig5_radar_plot(
             "{model}/DEAP/arousal",
             "ALL/SEED-V/5class",
             "{model}/DREAMER/valence",
+            "cross_corpus/{model}",
         ]
         scores = {}
         for m in models:
             vals = []
-            for i, key_tmpl in enumerate(exp_keys):
+            for key_tmpl in exp_keys:
                 key = key_tmpl.format(model=m)
                 r = data.get(key, {})
                 acc = r.get("mean", {}).get("accuracy", 0.0) * 100
