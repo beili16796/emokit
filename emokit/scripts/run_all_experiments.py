@@ -65,6 +65,30 @@ EXPERIMENTS = [
     ("configs/deap_loso_prpl_valence.yaml", "DEAP", "valence", "PR-PL/DEAP/valence"),
     ("configs/deap_loso_prpl_arousal.yaml", "DEAP", "arousal", "PR-PL/DEAP/arousal"),
     ("configs/seedv_loso_all_models.yaml", "SEED-V", "five_class", "ALL/SEED-V/5class"),
+    (
+        "configs/dreamer_loso_dgcnn_valence.yaml",
+        "DREAMER",
+        "valence",
+        "DGCNN/DREAMER/valence",
+    ),
+    (
+        "configs/dreamer_loso_dgcnn_arousal.yaml",
+        "DREAMER",
+        "arousal",
+        "DGCNN/DREAMER/arousal",
+    ),
+    (
+        "configs/dreamer_loso_cnnlstm_valence.yaml",
+        "DREAMER",
+        "valence",
+        "CNN-LSTM/DREAMER/valence",
+    ),
+    (
+        "configs/dreamer_loso_transformer_valence.yaml",
+        "DREAMER",
+        "valence",
+        "Transformer-MM/DREAMER/valence",
+    ),
 ]
 
 
@@ -76,7 +100,11 @@ def _make_dry_run_cfg(cfg: Any, dataset_key: str) -> Any:
         "params": {
             "n_subjects": 3,
             "n_trials": 8,
-            "n_channels": 62 if dataset_key == "SEED-V" else 32,
+            "n_channels": (
+                62
+                if dataset_key == "SEED-V"
+                else 14 if dataset_key == "DREAMER" else 32
+            ),
             "n_classes": 5 if dataset_key == "SEED-V" else 2,
         },
     }
@@ -124,6 +152,8 @@ def _override_roots(cfg: Any, args: argparse.Namespace, dataset_key: str) -> Any
         dataset_root = args.seedv_root
     elif dataset_key == "SEED":
         dataset_root = args.seed_root
+    if dataset_key == "DREAMER":
+        dataset_root = args.dreamer_root
     if dataset_root:
         return cfg.model_copy(
             update={"dataset": cfg.dataset.model_copy(update={"root": dataset_root})}
@@ -352,6 +382,7 @@ def main() -> None:
     parser.add_argument("--deap-root", default=None)
     parser.add_argument("--seedv-root", default=None)
     parser.add_argument("--seed-root", default=None)
+    parser.add_argument("--dreamer-root", default=None)
     parser.add_argument("--output-dir", default="results/paper_experiments")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume", action="store_true")

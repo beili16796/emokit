@@ -1,0 +1,43 @@
+experiment:
+  name: dreamer_loso_cnnlstm_valence
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DREAMER
+  root: /data/ssd/xwt/DREAMER
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+  label_axis: valence
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params:
+        fs: 128
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: CNN-LSTM
+  params:
+    n_classes: 2
+    input_type: de
+    n_channels: 14
+    n_epochs: 50
+    batch_size: 64
+    hidden_size: 64
+    n_layers: 2
+    dropout: 0.3
+    lr: 0.001
+    device: cpu
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/
+  save_checkpoints: false
