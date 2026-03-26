@@ -46,7 +46,12 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--channels", type=int, default=32)
     parser.add_argument("--bands", type=int, default=5)
-    parser.add_argument("--row-index", type=int, default=30, help="Electrode index (e.g. Fz≈30 in DEAP list).")
+    parser.add_argument(
+        "--row-index",
+        type=int,
+        default=30,
+        help="Electrode index (e.g. Fz≈30 in DEAP list).",
+    )
     parser.add_argument("--out", type=str, default="figures/dgcnn_adjacency_row.pdf")
     parser.add_argument("--montage", type=str, default="standard_1020")
     args = parser.parse_args()

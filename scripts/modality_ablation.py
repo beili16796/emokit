@@ -22,8 +22,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
-from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -64,13 +62,14 @@ def run_ablation(
     Returns:
         Summary dict mapping condition names to mean accuracy / F1.
     """
-    import numpy as np
 
     from emokit.datasets import load_dataset
     from emokit.datasets.synthetic import SyntheticDataset
     from emokit.evaluation.protocols import LOSOEvaluator
     from emokit.features.base import (
         GLOBAL_REGISTRY as TRANSFORM_REGISTRY,
+    )
+    from emokit.features.base import (
         BaseTransform,
         FeaturePipeline,
     )
@@ -183,7 +182,9 @@ def run_ablation(
         results = evaluator.run()
 
         json_path = out_dir / f"{condition_name}.json"
-        json_path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(results, indent=2, default=str), encoding="utf-8"
+        )
         logger.info("Saved %s", json_path)
 
         summary[condition_name] = {

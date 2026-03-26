@@ -2,7 +2,8 @@
 # Copyright (c) 2024 EmoKit Contributors
 # See LICENSE for full text.
 
-"""Compare LOSO (or held-out) metrics against published numbers — fill in after real runs.
+"""Compare LOSO (or held-out) metrics against published numbers — fill in
+after real runs.
 
 Usage (after you have real experiment outputs)::
 
@@ -65,10 +66,17 @@ def main() -> None:
             "  python scripts/run_all_experiments.py --deap-root <PATH> ...\n"
             "\n"
             "Then re-run:\n"
-            "  python scripts/reproduce_baselines.py --ours results/full_run/results_all.json"
+            "  python scripts/reproduce_baselines.py --ours "
+            "results/full_run/results_all.json"
         )
         for metric, paper_val in paper.items():
-            logger.info("Paper %s %s: %.1f (target ±%.1f%%)", args.model, metric, paper_val, TOLERANCE_PCT)
+            logger.info(
+                "Paper %s %s: %.1f (target ±%.1f%%)",
+                args.model,
+                metric,
+                paper_val,
+                TOLERANCE_PCT,
+            )
         sys.exit(0)
 
     ours_path = Path(args.ours)
