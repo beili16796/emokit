@@ -6,9 +6,9 @@
 
 Run from repo root after ``pip install -e .``::
 
-    python scripts/verify_dreamer_pipeline.py --root data/DREAMER
+    python scripts/verify_dreamer_pipeline.py --root /data/ssd/xwt/DREAMER
 
-If data are missing, the script exits with a clear message instead of a traceback.
+If data are missing, the script exits with a clear message.
 """
 
 from __future__ import annotations
@@ -23,19 +23,19 @@ import numpy as np
 
 from emokit.datasets.dreamer import DREAMERDataset
 from emokit.features.eeg import DEExtractor
-from emokit.utils import EmoKitDataError, get_data_root, set_seed
+from emokit.utils import EmoKitDataError, set_seed
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    """Load DREAMER for a few subjects, check shapes, and optionally compute DE."""
+    """Load DREAMER for a few subjects, check shapes, compute DE."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root",
         type=str,
-        default=str(get_data_root() / "DREAMER"),
+        default="/data/ssd/xwt/DREAMER",
         help="Path to directory containing DREAMER.mat.",
     )
     parser.add_argument("--subjects", type=int, nargs="+", default=[1, 2, 3])
@@ -58,8 +58,8 @@ def main() -> None:
         )
     except (FileNotFoundError, EmoKitDataError, OSError) as exc:
         logger.error(
-            "DREAMER data not available or path is wrong: %s\n"
-            "Please download DREAMER.mat from Zenodo and place it under --root.",
+            "DREAMER data not available: %s\n"
+            "Download DREAMER.mat from Zenodo and place under --root.",
             exc,
         )
         sys.exit(2)
@@ -74,46 +74,45 @@ def main() -> None:
             logger.error("Failed to load subject %d: %s", sid, exc)
             continue
 
-        eeg = raw.get("eeg")
-        ecg = raw.get("ecg")
+        eeg = raw["eeg"]
         labels = raw["labels"]
 
-        eeg_shape = tuple(eeg.shape) if eeg is not None else None
-        ecg_shape = tuple(ecg.shape) if ecg is not None else None
-        unique_labels = sorted(set(labels.tolist()))
-
         logger.info(
-            "Subject %d: EEG%s ECG%s Labels binary %s",
-            sid,
-            eeg_shape,
-            ecg_shape,
-            set(unique_labels),
+            "  EEG shape: %s  (n_windows=%d, channels=%d, samples=%d)",
+            eeg.shape,
+            eeg.shape[0],
+            eeg.shape[1],
+            eeg.shape[2],
         )
 
+        assert eeg.shape[1] == 14, f"Expected 14 EEG channels, got {eeg.shape[1]}"
+        assert (
+            eeg.shape[0] >= 18
+        ), f"Expected >=18 windows (18 videos), got {eeg.shape[0]}"
+
+        label_counts = dict(zip(*np.unique(labels, return_counts=True)))
+        logger.info("  Labels: %s", label_counts)
+
+        # Compute DE features
+        de = DEExtractor(fs=128)
+        de_features = de.fit_transform(eeg)
+        logger.info("  DE features shape: %s", de_features.shape)
+        assert de_features.shape == (
+            eeg.shape[0],
+            14,
+            5,
+        ), f"DE shape mismatch: {de_features.shape}"
+
+        ecg = raw.get("ecg")
+        ecg_shape = tuple(ecg.shape) if ecg is not None else None
+
         summary[str(sid)] = {
-            "eeg_shape": list(eeg_shape) if eeg_shape else None,
+            "eeg_shape": list(eeg.shape),
             "ecg_shape": list(ecg_shape) if ecg_shape else None,
-            "n_trials": int(labels.shape[0]),
-            "label_counts": {
-                str(int(k)): int(v)
-                for k, v in zip(*np.unique(labels, return_counts=True))
-            },
+            "de_shape": list(de_features.shape),
+            "n_windows": int(eeg.shape[0]),
+            "label_counts": {str(int(k)): int(v) for k, v in label_counts.items()},
         }
-
-        if eeg is not None:
-            assert eeg.shape[0] == 18, (
-                f"Expected 18 trials, got {eeg.shape[0]}"
-            )
-            assert eeg.shape[1] == 14, (
-                f"Expected 14 EEG channels, got {eeg.shape[1]}"
-            )
-            logger.info("  EEG assertions passed (18 trials, 14 channels)")
-
-        if ecg is not None:
-            assert ecg.shape[1] == 2, (
-                f"Expected 2 ECG channels, got {ecg.shape[1]}"
-            )
-            logger.info("  ECG assertions passed (2 channels)")
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
