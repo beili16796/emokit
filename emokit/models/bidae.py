@@ -114,6 +114,8 @@ class BiDAEModel(BaseModel):
         lr, batch_size, n_epochs, device.
     """
 
+    multimodal = True
+
     def __init__(
         self,
         n_classes: int = 3,
@@ -156,8 +158,17 @@ class BiDAEModel(BaseModel):
         self, X: dict[str, np.ndarray] | np.ndarray | torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if isinstance(X, dict):
-            x1 = torch.as_tensor(X["mod1"], dtype=torch.float32).to(self.device)
-            x2 = torch.as_tensor(X["mod2"], dtype=torch.float32).to(self.device)
+            if "mod1" in X and "mod2" in X:
+                x1 = torch.as_tensor(X["mod1"], dtype=torch.float32).to(self.device)
+                x2 = torch.as_tensor(X["mod2"], dtype=torch.float32).to(self.device)
+            else:
+                keys = sorted(X.keys())
+                if len(keys) < 2:
+                    raise ValueError(
+                        f"BiDAE requires 2 modalities, got {len(keys)}: {keys}"
+                    )
+                x1 = torch.as_tensor(X[keys[0]], dtype=torch.float32).to(self.device)
+                x2 = torch.as_tensor(X[keys[1]], dtype=torch.float32).to(self.device)
         elif isinstance(X, torch.Tensor):
             x1 = X.to(self.device)
             x2 = torch.zeros(X.shape[0], self.n_feat2, device=self.device)
@@ -243,10 +254,10 @@ class BiDAEModel(BaseModel):
             for x1b, x2b, yb in train_loader:
                 optimizer.zero_grad()
                 logits, z1, z2, x1_recon, x2_recon = net(x1b, x2b)
+                recon = mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b)
                 loss = (
                     ce_loss(logits, yb)
-                    + self.lambda_recon
-                    * (mse_loss(x1_recon, x1b) + mse_loss(x2_recon, x2b))
+                    + self.lambda_recon * recon
                     + self.mu_align * mse_loss(z1, z2)
                 )
                 loss.backward()

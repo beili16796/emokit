@@ -144,20 +144,82 @@ python -m emokit.scripts.verify_seed_pipeline --root $EMOKIT_DATA_ROOT/SEED --su
 
 ---
 
-## MAHNOB-HCI (Optional)
+## MAHNOB-HCI
 
 **Source**: <https://mahnob-db.eu/hci-tagging/>
 
-Requires BDF raw files. Each session in its own directory with
-a `.bdf` EEG file and `.xml` annotation.
+Supports two on-disk layouts:
+
+**Layout 1 — CSV** (preferred for local preprocessing):
+```
+$EMOKIT_DATA_ROOT/MAHNOB-HCI/
+  eeg/{subject_id}/{trial_id}_eeg.csv    # (rows × 32 channels)
+  ecg/{subject_id}/{trial_id}_ecg.csv
+  gsr/{subject_id}/{trial_id}_gsr.csv
+  valence_label.csv                       # rows = subjects, cols = trials
+  arousal_label.csv
+```
+
+**Layout 2 — BDF** (original):
+```
+$EMOKIT_DATA_ROOT/MAHNOB-HCI/
+  Subject1/session_dir/*.bdf
+  Subject2/...
+  labels.npy                              # optional label file
+```
+
+27 subjects, 20 trials each. 32-channel EEG + ECG + GSR.
+
+**Verification**:
+```bash
+python scripts/verify_hci_pipeline.py --root $EMOKIT_DATA_ROOT/MAHNOB-HCI
+```
 
 ---
 
-## DREAMER (Optional)
+## DREAMER
 
-**Source**: Request access from the authors.
+**Source**: [Zenodo](https://zenodo.org/record/546113) (Katsigiannis & Ramzan, 2018)
 
-Single `DREAMER.mat` file containing all 23 subjects.
+Single `DREAMER.mat` file containing all 23 subjects × 18 video clips.
+
+**Default path**: `/data/ssd/xwt/DREAMER/DREAMER.mat`
+
+```
+$EMOKIT_DATA_ROOT/DREAMER/
+  DREAMER.mat          # single file (~800 MB)
+```
+
+**Loading**:
+```python
+from scipy.io import loadmat
+mat = loadmat('DREAMER.mat', squeeze_me=True, struct_as_record=False)
+dreamer = mat['DREAMER']
+```
+
+**Internal structure**:
+```
+dreamer.Data[i]             # subject i (0-indexed, 23 subjects)
+  .EEG.stimuli[k]          # video k EEG, shape (M, 14) at 128 Hz
+  .EEG.baseline[k]         # baseline EEG, shape (M_base, 14)
+  .ECG.stimuli[k]          # video k ECG, shape (M, 2) at 256 Hz
+  .ECG.baseline[k]         # baseline ECG, shape (M_base, 2)
+  .ScoreValence[k]         # 1–5 float rating
+  .ScoreArousal[k]         # 1–5 float rating
+```
+
+**Important notes**:
+- EEG shape is `(M, 14)` not `(14, M)` — samples × channels
+- M varies across videos (different clip durations)
+- 14 channels = Emotiv EPOC layout: AF3, F7, F3, FC5, T7, P7, O1,
+  O2, P8, T8, FC6, F4, F8, AF4
+- Labels binarised at threshold 3.0: `> 3` → 1, `<= 3` → 0
+- Baseline correction: per-channel mean of baseline subtracted from stimulus
+
+**Verification**:
+```bash
+python scripts/verify_dreamer_pipeline.py --root /data/ssd/xwt/DREAMER
+```
 
 ---
 

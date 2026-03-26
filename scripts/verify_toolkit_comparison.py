@@ -51,7 +51,10 @@ def main() -> None:
     out = Path("results/toolkit_claims_index.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(CLAIMS, indent=2), encoding="utf-8")
-    logger.info("Wrote %s — replace booleans with cited evidence before submission.", out)
+    logger.info(
+        "Wrote %s — replace booleans with cited evidence before submission.",
+        out,
+    )
     for name, row in CLAIMS.items():
         logger.info("%s: %s", name, row.get("evidence_url"))
 

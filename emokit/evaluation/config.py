@@ -84,7 +84,7 @@ class EvaluationConfig(BaseModel):
     @field_validator("protocol")
     @classmethod
     def _check_protocol(cls, v: str) -> str:
-        allowed = {"loso", "subject_dependent", "session"}
+        allowed = {"loso", "subject_dependent", "session", "cross_corpus"}
         if v not in allowed:
             raise ValueError(f"protocol must be one of {sorted(allowed)}, got '{v}'")
         return v
@@ -212,11 +212,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     """Recursively merge two dictionaries."""
     merged = dict(base)
     for key, value in override.items():
-        if (
-            key in merged
-            and isinstance(merged[key], dict)
-            and isinstance(value, dict)
-        ):
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
             merged[key] = _deep_merge(merged[key], value)
         else:
             merged[key] = value

@@ -5,6 +5,7 @@ Usage::
 
     python -m emokit.scripts.verify_seed_pipeline --root /path/to/SEED --subject 1
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,15 +48,22 @@ def verify(root: str, subject_id: int, use_de: bool = True) -> None:
 
     if use_de:
         if eeg.ndim != 3:
-            errors.append(f"DE features should be 3D (windows, channels, bands), got {eeg.ndim}D")
+            errors.append(
+                f"DE features should be 3D (windows, channels, bands), got {eeg.ndim}D"
+            )
         elif eeg.shape[1] != _EXPECTED_N_EEG_CHANNELS:
-            errors.append(f"Expected {_EXPECTED_N_EEG_CHANNELS} channels, got {eeg.shape[1]}")
-        print(f"DE feature shape: (windows={eeg.shape[0]}, ch={eeg.shape[1]}, bands={eeg.shape[2]})")
+            errors.append(
+                f"Expected {_EXPECTED_N_EEG_CHANNELS} channels, got {eeg.shape[1]}"
+            )
+        w, ch, bd = eeg.shape[0], eeg.shape[1], eeg.shape[2]
+        print(f"DE feature shape: (windows={w}, ch={ch}, bands={bd})")
         de_range = (float(eeg.min()), float(eeg.max()))
         print(f"DE range: [{de_range[0]:.4f}, {de_range[1]:.4f}]")
     else:
         if eeg.shape[1] != _EXPECTED_N_EEG_CHANNELS:
-            errors.append(f"Expected {_EXPECTED_N_EEG_CHANNELS} EEG channels, got {eeg.shape[1]}")
+            errors.append(
+                f"Expected {_EXPECTED_N_EEG_CHANNELS} EEG channels, got {eeg.shape[1]}"
+            )
 
     if np.any(np.isnan(eeg)):
         errors.append("EEG contains NaN values")
@@ -64,9 +72,11 @@ def verify(root: str, subject_id: int, use_de: bool = True) -> None:
 
     unique = sorted(set(labels.tolist()))
     if not all(0 <= v < _EXPECTED_N_CLASSES for v in unique):
-        errors.append(f"Labels should be 0-{_EXPECTED_N_CLASSES - 1}, got unique={unique}")
+        errors.append(
+            f"Labels should be 0-{_EXPECTED_N_CLASSES - 1}, got unique={unique}"
+        )
 
-    print(f"\nLabel distribution:")
+    print("\nLabel distribution:")
     for i, name in enumerate(_LABEL_NAMES):
         count = int((labels == i).sum())
         print(f"  {i} ({name}): {count}")
@@ -77,13 +87,15 @@ def verify(root: str, subject_id: int, use_de: bool = True) -> None:
         errors.append(f"Suspiciously few data points: {total}")
 
     if errors:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"ERRORS ({len(errors)}):")
         for e in errors:
             print(f"  - {e}")
-        raise RuntimeError(f"SEED pipeline verification failed with {len(errors)} errors")
+        raise RuntimeError(
+            f"SEED pipeline verification failed with {len(errors)} errors"
+        )
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("ALL CHECKS PASSED")
 
 
@@ -92,7 +104,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, help="Path to SEED data directory")
     parser.add_argument("--subject", type=int, default=1, help="Subject ID (1-15)")
-    parser.add_argument("--raw", action="store_true", help="Load raw EEG instead of DE features")
+    parser.add_argument(
+        "--raw", action="store_true", help="Load raw EEG instead of DE features"
+    )
     args = parser.parse_args()
     verify(args.root, args.subject, use_de=not args.raw)
 

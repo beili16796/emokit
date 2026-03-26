@@ -1,0 +1,40 @@
+experiment:
+  name: dreamer_loso_dgcnn_valence
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DREAMER
+  root: data/DREAMER
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+  label_axis: valence
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params:
+        fs: 128
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: DGCNN
+  params:
+    n_channels: 14
+    n_bands: 5
+    hidden_dim: 64
+    n_epochs: 50
+    lr: 0.001
+    batch_size: 64
+    lambda_reg: 0.0001
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/
+  save_checkpoints: false

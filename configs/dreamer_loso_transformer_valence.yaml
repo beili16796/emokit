@@ -1,0 +1,43 @@
+experiment:
+  name: dreamer_loso_transformer_valence
+  seed: 42
+  device: cpu
+
+dataset:
+  name: DREAMER
+  root: /data/ssd/xwt/DREAMER
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+  label_axis: valence
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params:
+        fs: 128
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: Transformer-MM
+  params:
+    n_channels: 14
+    n_bands: 5
+    n_peripheral_feat: 0
+    d_model: 64
+    nhead: 2
+    n_layers: 2
+    dropout: 0.1
+    lr: 0.0005
+    batch_size: 64
+    n_epochs: 50
+
+evaluation:
+  protocol: loso
+  val_fraction: 0.1
+
+output:
+  results_dir: results/
+  save_checkpoints: false

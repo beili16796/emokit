@@ -55,6 +55,12 @@ PAPER_NUMBERS: dict[str, dict[str, float]] = {
     },
 }
 
+DREAMER_NUMBERS: dict[str, dict[str, float | None]] = {
+    "DGCNN": {"DREAMER_valence": None, "DREAMER_arousal": None},
+    "CNN-LSTM": {"DREAMER_valence": None},
+    "Transformer-MM": {"DREAMER_valence": None},
+}
+
 TOLERANCE = 1.5
 
 

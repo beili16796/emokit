@@ -222,8 +222,13 @@ class DEAPDataset(BaseDataset):
 
         raw = mne.io.read_raw_bdf(str(path), preload=True, verbose=False)
         raw.pick_channels(_EEG_CHANNELS, ordered=True)
-        raw.filter(1.0, 45.0, method="iir",
-                   iir_params=dict(order=5, ftype="butter"), verbose=False)
+        raw.filter(
+            1.0,
+            45.0,
+            method="iir",
+            iir_params=dict(order=5, ftype="butter"),
+            verbose=False,
+        )
         raw.set_eeg_reference("average", verbose=False)
 
         sfreq = raw.info["sfreq"]

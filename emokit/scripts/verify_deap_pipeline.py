@@ -5,6 +5,7 @@ Usage::
 
     python -m emokit.scripts.verify_deap_pipeline --root /path/to/DEAP --subject 1
 """
+
 from __future__ import annotations
 
 import argparse
@@ -65,15 +66,21 @@ def verify(root: str, subject_id: int) -> None:
         if eeg.shape[0] != _EXPECTED_N_TRIALS:
             errors.append(f"Expected {_EXPECTED_N_TRIALS} trials, got {eeg.shape[0]}")
         if eeg.shape[1] != _EXPECTED_N_EEG_CHANNELS:
-            errors.append(f"Expected {_EXPECTED_N_EEG_CHANNELS} EEG channels, got {eeg.shape[1]}")
+            errors.append(
+                f"Expected {_EXPECTED_N_EEG_CHANNELS} EEG channels, got {eeg.shape[1]}"
+            )
         if eeg.shape[2] != _EXPECTED_SAMPLES:
             # Allow some tolerance for resampled data
             if abs(eeg.shape[2] - _EXPECTED_SAMPLES) > 100:
                 errors.append(
-                    f"Expected ~{_EXPECTED_SAMPLES} samples per trial, got {eeg.shape[2]}"
+                    f"Expected ~{_EXPECTED_SAMPLES} samples per trial, "
+                    f"got {eeg.shape[2]}"
                 )
             else:
-                print(f"  Note: sample count {eeg.shape[2]} vs expected {_EXPECTED_SAMPLES}")
+                print(
+                    f"  Note: sample count {eeg.shape[2]} vs expected "
+                    f"{_EXPECTED_SAMPLES}"
+                )
 
         if np.any(np.isnan(eeg)):
             errors.append("EEG contains NaN values")
@@ -91,7 +98,9 @@ def verify(root: str, subject_id: int) -> None:
     if not unique_labels.issubset({0, 1}):
         errors.append(f"Labels should be binary {{0,1}}, got {unique_labels}")
 
-    print(f"\nLabel distribution: 0={int((labels == 0).sum())}, 1={int((labels == 1).sum())}")
+    n0 = int((labels == 0).sum())
+    n1 = int((labels == 1).sum())
+    print(f"\nLabel distribution: 0={n0}, 1={n1}")
 
     if gsr is not None:
         if gsr.shape[0] != _EXPECTED_N_TRIALS or gsr.shape[1] != 1:
@@ -102,13 +111,15 @@ def verify(root: str, subject_id: int) -> None:
         print("  Warning: GSR not extracted (may be fine for EEG-only experiments)")
 
     if errors:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"ERRORS ({len(errors)}):")
         for e in errors:
             print(f"  - {e}")
-        raise RuntimeError(f"DEAP pipeline verification failed with {len(errors)} errors")
+        raise RuntimeError(
+            f"DEAP pipeline verification failed with {len(errors)} errors"
+        )
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("ALL CHECKS PASSED")
 
 

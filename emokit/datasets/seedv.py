@@ -293,6 +293,12 @@ class SEEDVDataset(BaseDataset):
             if len(labels) == 1:
                 labels = np.repeat(labels, de.shape[0])
             else:
+                logger.warning(
+                    "Label count (%d) != DE window count (%d) " "in %s; truncating",
+                    len(labels),
+                    de.shape[0],
+                    mat_path,
+                )
                 n = min(len(labels), de.shape[0])
                 de, labels = de[:n], labels[:n]
 
@@ -384,13 +390,15 @@ class SEEDVDataset(BaseDataset):
             else:
                 min_t = min(a.shape[2] for a in all_eeg)
                 result["eeg"] = np.concatenate(
-                    [a[:, :, :min_t] for a in all_eeg], axis=0,
+                    [a[:, :, :min_t] for a in all_eeg],
+                    axis=0,
                 )
 
         if all_eog:
             min_t = min(a.shape[2] for a in all_eog)
             result["eog"] = np.concatenate(
-                [a[:, :, :min_t] for a in all_eog], axis=0,
+                [a[:, :, :min_t] for a in all_eog],
+                axis=0,
             )
 
         result["labels"] = np.concatenate(all_labels, axis=0)

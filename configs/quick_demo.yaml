@@ -5,41 +5,28 @@ experiment:
 
 dataset:
   name: SYNTHETIC
-  root: null
+  root: /tmp/emokit_synthetic
   subjects: null
-  window_sec: 4.0
+  window_sec: 1.0
   overlap: 0.0
   modalities: [eeg]
   label_axis: null
-  params:
-    n_subjects: 3
-    n_trials: 10
-    n_channels: 32
-    fs: 128
-    n_classes: 2
 
 feature_pipeline:
-  steps:
-    - name: DEExtractor
-      params:
-        fs: 128
-    - name: EEGNormalizer
-      params: {}
+  steps: []
 
 model:
-  name: DGCNN
+  name: PR-PL
   params:
-    n_channels: 32
-    n_bands: 5
-    hidden_dim: 16
-    lr: 0.005
-    batch_size: 32
+    n_classes: 2
+    n_feat: 4096
     n_epochs: 3
-    lambda_reg: 0.0001
+    batch_size: 16
+    lr: 0.001
 
 evaluation:
   protocol: loso
-  val_fraction: 0.0
+  val_fraction: 0.1
 
 output:
   results_dir: results/quick_demo/

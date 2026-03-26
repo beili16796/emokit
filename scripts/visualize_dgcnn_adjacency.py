@@ -33,10 +33,38 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 DEAP_CHANNEL_NAMES: list[str] = [
-    "Fp1", "AF3", "F3", "F7", "FC5", "FC1", "C3", "T7",
-    "CP5", "CP1", "P3", "P7", "PO3", "O1", "Oz", "Pz",
-    "Fp2", "AF4", "F4", "F8", "FC6", "FC2", "C4", "T8",
-    "CP6", "CP2", "P4", "P8", "PO4", "O2", "Fz", "Cz",
+    "Fp1",
+    "AF3",
+    "F3",
+    "F7",
+    "FC5",
+    "FC1",
+    "C3",
+    "T7",
+    "CP5",
+    "CP1",
+    "P3",
+    "P7",
+    "PO3",
+    "O1",
+    "Oz",
+    "Pz",
+    "Fp2",
+    "AF4",
+    "F4",
+    "F8",
+    "FC6",
+    "FC2",
+    "C4",
+    "T8",
+    "CP6",
+    "CP2",
+    "P4",
+    "P8",
+    "PO4",
+    "O2",
+    "Fz",
+    "Cz",
 ]
 
 
@@ -46,7 +74,12 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--channels", type=int, default=32)
     parser.add_argument("--bands", type=int, default=5)
-    parser.add_argument("--row-index", type=int, default=30, help="Electrode index (e.g. Fz≈30 in DEAP list).")
+    parser.add_argument(
+        "--row-index",
+        type=int,
+        default=30,
+        help="Electrode index (e.g. Fz≈30 in DEAP list).",
+    )
     parser.add_argument("--out", type=str, default="figures/dgcnn_adjacency_row.pdf")
     parser.add_argument("--montage", type=str, default="standard_1020")
     args = parser.parse_args()

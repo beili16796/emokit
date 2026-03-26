@@ -60,7 +60,12 @@ def load_per_subject_metric(
     for sid_str, metrics in per_subject.items():
         sid = int(sid_str)
         if metric not in metrics:
-            logger.warning("Metric '%s' missing for subject %s in %s", metric, sid_str, json_path)
+            logger.warning(
+                "Metric '%s' missing for subject %s in %s",
+                metric,
+                sid_str,
+                json_path,
+            )
             continue
         values[sid] = float(metrics[metric])
 

@@ -34,11 +34,17 @@ def _pick_subject_id(result: dict) -> int | None:
 
 def export(results_dir: Path, emosense_dir: Path) -> None:
     emosense_dir.mkdir(parents=True, exist_ok=True)
-    results_all = json.loads((results_dir / "results_all.json").read_text(encoding="utf-8"))
+    results_all = json.loads(
+        (results_dir / "results_all.json").read_text(encoding="utf-8")
+    )
 
     for demo_name, exp_key in CHECKPOINT_MAP.items():
         if exp_key.startswith("ALL/SEED-V"):
-            seedv = results_all.get(exp_key, {}).get("per_model", {}).get("Transformer-MM", {})
+            seedv = (
+                results_all.get(exp_key, {})
+                .get("per_model", {})
+                .get("Transformer-MM", {})
+            )
             per_subject = seedv.get("per_subject", {})
             if not per_subject:
                 logger.warning("Missing SEED-V per-subject results for %s", exp_key)
@@ -48,7 +54,12 @@ def export(results_dir: Path, emosense_dir: Path) -> None:
                 per_subject.items(),
                 key=lambda item: abs(item[1].get("accuracy", 0.0) - mean_acc),
             )
-            src = results_dir / "ALL_SEED-V_5class" / "checkpoints" / f"subject_{int(sid):02d}_best.pt"
+            src = (
+                results_dir
+                / "ALL_SEED-V_5class"
+                / "checkpoints"
+                / f"subject_{int(sid):02d}_best.pt"
+            )
             chosen_sid = int(sid)
             chosen_acc = metrics.get("accuracy", 0.0)
         else:
@@ -60,7 +71,11 @@ def export(results_dir: Path, emosense_dir: Path) -> None:
             if chosen_sid is None:
                 logger.warning("No per-subject results for %s", exp_key)
                 continue
-            chosen_acc = result["per_subject"][str(chosen_sid)]["accuracy"] if str(chosen_sid) in result["per_subject"] else result["per_subject"][chosen_sid]["accuracy"]
+            chosen_acc = (
+                result["per_subject"][str(chosen_sid)]["accuracy"]
+                if str(chosen_sid) in result["per_subject"]
+                else result["per_subject"][chosen_sid]["accuracy"]
+            )
             src = (
                 results_dir
                 / exp_key.replace("/", "_")

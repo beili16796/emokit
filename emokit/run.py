@@ -62,8 +62,7 @@ def _build_evaluator(
     evaluator_cls = _PROTOCOL_MAP.get(protocol)
     if evaluator_cls is None:
         raise ValueError(
-            f"Unknown protocol '{protocol}'. "
-            f"Available: {sorted(_PROTOCOL_MAP.keys())}"
+            f"Unknown protocol '{protocol}'. Available: {sorted(_PROTOCOL_MAP.keys())}"
         )
 
     return evaluator_cls(
@@ -141,7 +140,10 @@ def main() -> None:
         cfg = cfg.model_copy(
             update={
                 "dataset": cfg.dataset.model_copy(
-                    update={"name": "SYNTHETIC", "root": None}
+                    update={
+                        "name": "SYNTHETIC",
+                        "root": "/tmp/emokit_synthetic",
+                    }
                 )
             }
         )

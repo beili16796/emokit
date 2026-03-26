@@ -174,14 +174,12 @@ class SEEDDataset(BaseDataset):
         if not ef_dir.is_dir():
             ef_dir = self.root
 
-        mat_files = sorted(
-            p for p in ef_dir.glob("*.mat")
-            if p.name != "label.mat"
-        )
+        mat_files = sorted(p for p in ef_dir.glob("*.mat") if p.name != "label.mat")
 
         if len(mat_files) < _N_SUBJECTS * _N_SESSIONS:
             # Try grouping by prefix (subject name before date)
             from collections import defaultdict
+
             groups: dict[str, list[Path]] = defaultdict(list)
             for p in mat_files:
                 prefix = p.stem.rsplit("_", 1)[0]
@@ -248,7 +246,9 @@ class SEEDDataset(BaseDataset):
 
         de_keys = sorted(
             (k for k in mat if "de_LDS" in k and not k.startswith("__")),
-            key=lambda k: int("".join(c for c in k.split("de_LDS")[-1] if c.isdigit()) or "0"),
+            key=lambda k: int(
+                "".join(c for c in k.split("de_LDS")[-1] if c.isdigit()) or "0"
+            ),
         )
 
         if not de_keys:
@@ -275,8 +275,7 @@ class SEEDDataset(BaseDataset):
         mat = loadmat(str(mat_path), squeeze_me=True)
 
         data_keys = [
-            k for k in mat
-            if not k.startswith("__") and k not in ("labels", "label")
+            k for k in mat if not k.startswith("__") and k not in ("labels", "label")
         ]
         trials: list[np.ndarray] = []
         for key in sorted(data_keys):
@@ -325,9 +324,7 @@ class SEEDDataset(BaseDataset):
                     if trial_idx < len(session_labels):
                         lbl = session_labels[trial_idx]
                         all_de.append(de)
-                        all_labels.append(
-                            np.full(de.shape[0], lbl, dtype=np.int64)
-                        )
+                        all_labels.append(np.full(de.shape[0], lbl, dtype=np.int64))
 
             if not all_de:
                 raise EmoKitDataError(
@@ -353,9 +350,7 @@ class SEEDDataset(BaseDataset):
             all_labels_raw.append(labels)
 
         if not all_data:
-            raise EmoKitDataError(
-                f"No raw EEG loaded for SEED subject {subject_id}"
-            )
+            raise EmoKitDataError(f"No raw EEG loaded for SEED subject {subject_id}")
 
         min_t = min(a.shape[2] for a in all_data)
         eeg = np.concatenate([a[:, :, :min_t] for a in all_data], axis=0)

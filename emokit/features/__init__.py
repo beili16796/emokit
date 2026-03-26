@@ -6,11 +6,19 @@
 
 from __future__ import annotations
 
+from emokit.features.augmentation import (
+    FeatureMixup,
+    TemporalSegmentPermutation,
+)
 from emokit.features.base import (
     GLOBAL_REGISTRY,
     BaseTransform,
     FeaturePipeline,
     TransformRegistry,
+)
+from emokit.features.channel_align import (
+    align_channels,
+    subset_features,
 )
 from emokit.features.eeg import (
     BandpowerExtractor,
@@ -28,10 +36,14 @@ __all__ = [
     "BandpowerExtractor",
     "DEExtractor",
     "EEGNormalizer",
+    "FeatureMixup",
     "FeaturePipeline",
     "GLOBAL_REGISTRY",
     "GSRExtractor",
     "HRVExtractor",
     "ModalityFusionTransform",
+    "TemporalSegmentPermutation",
     "TransformRegistry",
+    "align_channels",
+    "subset_features",
 ]

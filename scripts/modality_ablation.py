@@ -22,8 +22,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
-from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +45,7 @@ def run_ablation(
     modalities: list[str] | None = None,
     model_name: str | None = None,
     results_dir: str = "results/ablation/",
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Run leave-one-modality-out ablation.
 
@@ -58,13 +57,23 @@ def run_ablation(
         modalities: Explicit modality list; inferred from config if ``None``.
         model_name: Override model name.
         results_dir: Where to write per-condition JSON results.
+        dry_run: If ``True``, substitute SyntheticDataset for real data.
 
     Returns:
         Summary dict mapping condition names to mean accuracy / F1.
     """
+
     from emokit.datasets import load_dataset
+    from emokit.datasets.synthetic import SyntheticDataset
     from emokit.evaluation.protocols import LOSOEvaluator
-    from emokit.features.base import GLOBAL_REGISTRY as TRANSFORM_REGISTRY, FeaturePipeline
+    from emokit.features.base import (
+        GLOBAL_REGISTRY as TRANSFORM_REGISTRY,
+    )
+    from emokit.features.base import (
+        BaseTransform,
+        FeaturePipeline,
+    )
+    from emokit.features.eeg import DEExtractor, EEGNormalizer
     from emokit.utils import set_seed
 
     cfg = _load_yaml(base_config_path)
@@ -76,7 +85,10 @@ def run_ablation(
         modalities = ds_cfg.get("modalities") or ["eeg"]
     if model_name is None:
         model_name = cfg["model"]["name"]
-    model_params = cfg["model"].get("params", {})
+    model_params = dict(cfg["model"].get("params", {}))
+
+    if dry_run:
+        model_params["n_epochs"] = 2
 
     steps_cfg = cfg.get("feature_pipeline", {}).get("steps", [])
     steps: list[tuple[str, Any]] = []
@@ -101,22 +113,66 @@ def run_ablation(
     for condition_name, mod_subset in conditions:
         logger.info("=== Condition: %s  modalities=%s ===", condition_name, mod_subset)
 
-        ds_kwargs: dict[str, Any] = {"root": ds_cfg.get("root", "data/")}
-        if ds_cfg.get("subjects"):
-            ds_kwargs["subjects"] = ds_cfg["subjects"]
-        if ds_cfg.get("window_sec"):
-            ds_kwargs["window_sec"] = ds_cfg["window_sec"]
-        if ds_cfg.get("overlap") is not None:
-            ds_kwargs["overlap"] = ds_cfg["overlap"]
-        ds_kwargs["modalities"] = mod_subset
-        if ds_cfg.get("label_axis"):
-            ds_kwargs["label_axis"] = ds_cfg["label_axis"]
+        if dry_run:
+            n_channels = model_params.get("n_channels", 32)
+            dataset = SyntheticDataset(
+                n_subjects=3,
+                n_trials=8,
+                n_channels=n_channels,
+                n_classes=2,
+                modalities=mod_subset,
+                fs=128.0,
+                window_sec=4.0,
+            )
+        else:
+            ds_kwargs: dict[str, Any] = {"root": ds_cfg.get("root", "data/")}
+            if ds_cfg.get("subjects"):
+                ds_kwargs["subjects"] = ds_cfg["subjects"]
+            if ds_cfg.get("window_sec"):
+                ds_kwargs["window_sec"] = ds_cfg["window_sec"]
+            if ds_cfg.get("overlap") is not None:
+                ds_kwargs["overlap"] = ds_cfg["overlap"]
+            ds_kwargs["modalities"] = mod_subset
+            if ds_cfg.get("label_axis"):
+                ds_kwargs["label_axis"] = ds_cfg["label_axis"]
+            dataset = load_dataset(ds_cfg["name"], **ds_kwargs)
 
-        dataset = load_dataset(ds_cfg["name"], **ds_kwargs)
+        if dry_run:
 
-        pipeline = FeaturePipeline(
-            [(n, type(t)(**{}) if hasattr(t, "__dict__") else t) for n, t in steps]
-        )
+            class _ReshapeTo3D(BaseTransform):
+                def __init__(self, nc, ns):
+                    self.nc, self.ns = nc, ns
+
+                def fit(self, X, y=None):
+                    return self
+
+                def transform(self, X):
+                    X = np.asarray(X)
+                    return X.reshape(X.shape[0], self.nc, self.ns) if X.ndim == 2 else X
+
+            class _FlattenTo2D(BaseTransform):
+                def fit(self, X, y=None):
+                    return self
+
+                def transform(self, X):
+                    X = np.asarray(X)
+                    return X.reshape(X.shape[0], -1) if X.ndim == 3 else X
+
+            n_ch_pipe = model_params.get("n_channels", 32)
+            n_samples_pipe = int(128.0 * 4.0)
+            needs_flat = model_name not in ("DGCNN",)
+            dry_steps = [
+                ("reshape", _ReshapeTo3D(n_ch_pipe, n_samples_pipe)),
+                ("de", DEExtractor(fs=128)),
+                ("norm", EEGNormalizer()),
+            ]
+            if needs_flat:
+                dry_steps.append(("flatten", _FlattenTo2D()))
+            pipeline = FeaturePipeline(dry_steps)
+        else:
+            pipeline = FeaturePipeline(
+                [(n, type(t)(**{}) if hasattr(t, "__dict__") else t) for n, t in steps]
+            )
 
         evaluator = LOSOEvaluator(
             dataset=dataset,
@@ -129,7 +185,9 @@ def run_ablation(
         results = evaluator.run()
 
         json_path = out_dir / f"{condition_name}.json"
-        json_path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(results, indent=2, default=str), encoding="utf-8"
+        )
         logger.info("Saved %s", json_path)
 
         summary[condition_name] = {
@@ -181,14 +239,32 @@ def main() -> None:
         default="results/ablation/",
         help="Output directory for ablation results.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Use SyntheticDataset instead of real data.",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Path for the ablation summary JSON (overrides --results-dir).",
+    )
     args = parser.parse_args()
 
-    run_ablation(
+    summary = run_ablation(
         base_config_path=args.config,
         modalities=args.modalities,
         model_name=args.model,
         results_dir=args.results_dir,
+        dry_run=args.dry_run,
     )
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        logger.info("Output also written to %s", out_path)
 
 
 if __name__ == "__main__":
