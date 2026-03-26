@@ -134,6 +134,17 @@ results = evaluator.run()
 print(f"Mean accuracy: {results['mean']['accuracy']:.4f}")
 ```
 
+## Dataset Verification
+
+Verify your dataset setup (see [`docs/dataset_setup.md`](docs/dataset_setup.md)):
+
+```bash
+python scripts/verify_dreamer_pipeline.py --root /data/ssd/xwt/DREAMER
+python scripts/verify_hci_pipeline.py --root /path/to/MAHNOB-HCI
+python -m emokit.scripts.verify_deap_pipeline --root /path/to/DEAP
+python -m emokit.scripts.verify_seedv_pipeline --root /path/to/SEED-V
+```
+
 ## Contributing
 
 Contributions are welcome! Please follow these steps:
