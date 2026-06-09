@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from emokit.evaluation.cross_corpus import CrossCorpusEvaluator
 from emokit.evaluation.protocols import (
     LOSOEvaluator,
     MultiModelLOSOEvaluator,
@@ -16,6 +17,7 @@ from emokit.evaluation.protocols import (
 )
 
 __all__ = [
+    "CrossCorpusEvaluator",
     "LOSOEvaluator",
     "MultiModelLOSOEvaluator",
     "ResultLogger",

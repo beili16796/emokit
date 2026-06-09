@@ -2,12 +2,12 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/emokit/emokit/actions/workflows/ci.yml/badge.svg)](https://github.com/emokit/emokit/actions)
+[![CI](https://github.com/beili16796/emokit/actions/workflows/ci.yml/badge.svg)](https://github.com/beili16796/emokit/actions)
 
-**Modular Physiological Signal Analysis & Benchmarking Toolkit** for EEG-based
-emotion recognition research. EmoKit provides unified dataset loaders, feature
-extraction pipelines, deep-learning models, and reproducible evaluation
-protocols — all wired together through a single YAML config.
+**LOSO-first benchmark and toolkit** for multimodal physiological emotion
+recognition. EmoKit provides unified dataset loaders, feature extraction
+pipelines, deep-learning models, and reproducible evaluation protocols, all
+wired together through a single YAML config.
 
 ---
 
@@ -35,15 +35,56 @@ python -m emokit.scripts.reproduce_baselines \
     --seedv-root $EMOKIT_DATA_ROOT/SEED-V
 ```
 
+## Cross-corpus benchmark
+
+EmoKit treats cross-dataset transfer as a first-class protocol. The source
+dataset is declared in `dataset`, the held-out target dataset is declared in
+`target_dataset`, and the evaluator aligns shared EEG channels by 10-20 names.
+
+```bash
+export EMOKIT_DATA_ROOT=/path/to/datasets
+python -m emokit.run configs/cross_corpus_seed_to_dreamer_dgcnn.yaml
+```
+
+The run writes JSON, CSV, and `results_db.csv` summaries under
+`results/cross_corpus_seed_to_dreamer_dgcnn/`.
+
+## Augmentation ablation
+
+Two LOSO-oriented training transforms are available through YAML:
+`FeatureMixup` and `TemporalSegmentPermutation`. To run the configured
+DGCNN valence ablation:
+
+```bash
+python -m emokit.run configs/deap_loso_dgcnn_valence_augmented.yaml
+```
+
+For the full four-condition ablation used in development:
+
+```bash
+python -m emokit.scripts.augmentation_ablation \
+    --data-root $EMOKIT_DATA_ROOT/DEAP \
+    --output results/augmentation_ablation
+```
+
 ## Installation
 
 **From source (editable):**
 
 ```bash
-git clone https://github.com/emokit/emokit.git
+git clone https://github.com/beili16796/emokit.git
 cd emokit
 pip install -e ".[dev]"
 ```
+
+**Docker smoke test:**
+
+```bash
+docker build -t emokit:dev .
+docker run --rm emokit:dev
+```
+
+See [`examples/`](examples/) for reviewer-oriented commands.
 
 ## YAML Configuration
 
@@ -78,7 +119,7 @@ model:
     n_epochs: 50
 
 evaluation:
-  protocol: loso
+  protocol: loso  # also supports subject_dependent, session, cross_corpus
   val_fraction: 0.1
 
 output:
@@ -100,6 +141,15 @@ python -m emokit.run configs/deap_loso_dgcnn.yaml
 | SEED       | 15       | EEG               | 3-class    | 675    |
 | MAHNOB-HCI | 27       | EEG+ECG+GSR+video | V/A        | 527    |
 | DREAMER    | 23       | EEG+ECG           | V/A scale  | 414    |
+
+## Evaluation protocols
+
+| Protocol | YAML value | Output |
+|----------|------------|--------|
+| Leave-One-Subject-Out | `loso` | per-subject folds, mean/std, raw predictions |
+| Subject-dependent | `subject_dependent` | within-subject train/test summaries |
+| Cross-session | `session` | train earlier sessions, test final session |
+| Cross-corpus | `cross_corpus` | source-to-target transfer with channel alignment |
 
 ## Supported models
 
@@ -165,9 +215,9 @@ If you use EmoKit in your research, please cite:
 ```bibtex
 @software{emokit2024,
   title   = {EmoKit: Modular Physiological Signal Analysis \& Benchmarking Toolkit},
-  author  = {EmoKit Contributors},
-  year    = {2024},
-  url     = {https://github.com/emokit/emokit},
+  author  = {Xu, Wentian and Shen, Jian},
+  year    = {2026},
+  url     = {https://github.com/beili16796/emokit},
   license = {MIT}
 }
 ```

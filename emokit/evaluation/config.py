@@ -111,6 +111,7 @@ class FullConfig(BaseModel):
 
     experiment: ExperimentConfig
     dataset: DatasetConfig
+    target_dataset: DatasetConfig | None = None
     feature_pipeline: FeaturePipelineConfig = Field(
         default_factory=lambda: FeaturePipelineConfig(steps=[])
     )

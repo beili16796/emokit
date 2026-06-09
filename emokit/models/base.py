@@ -191,6 +191,16 @@ class BaseModel(ABC):
         if self.network is None:
             raise EmoKitModelError("Build the network before loading weights.")
         state = torch.load(path, map_location=self.device, weights_only=True)
+        if isinstance(state, dict):
+            for key in ("state_dict", "model_state_dict"):
+                nested = state.get(key)
+                if isinstance(nested, dict):
+                    state = nested
+                    break
+        if isinstance(state, dict) and state and all(
+            isinstance(key, str) and key.startswith("network.") for key in state
+        ):
+            state = {key.removeprefix("network."): value for key, value in state.items()}
         self.network.load_state_dict(state)
         self.network.to(self.device)
         logger.info("Model loaded from %s", path)
@@ -350,18 +360,26 @@ class StandardTrainer:
         if loss_fn is None:
             loss_fn = nn.CrossEntropyLoss()
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=self.lr, weight_decay=1e-4,
+        )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=5
+            optimizer, mode="min", factor=0.5, patience=5,
         )
 
+        has_val = val_loader is not None
         stopper = (
-            EarlyStopping(patience=self.patience, min_delta=1e-4, mode="min")
+            EarlyStopping(
+                patience=self.patience,
+                min_delta=1e-4,
+                mode="max" if has_val else "min",
+            )
             if self.patience > 0
             else None
         )
 
         history: dict[str, list[float]] = {"train_loss": [], "val_acc": []}
+        best_state: dict | None = None
 
         for epoch in tqdm(range(self.n_epochs), desc="Training", leave=False):
             model.train()
@@ -387,7 +405,7 @@ class StandardTrainer:
             scheduler.step(avg_loss)
 
             val_acc = 0.0
-            if val_loader is not None:
+            if has_val:
                 model.eval()
                 correct = 0
                 total = 0
@@ -408,8 +426,18 @@ class StandardTrainer:
                 val_acc,
             )
 
-            if stopper is not None and stopper(avg_loss):
-                logger.info("Early stopping at epoch %d", epoch + 1)
-                break
+            stop_metric = val_acc if has_val else avg_loss
+            if stopper is not None:
+                if has_val and (
+                    stopper.best is None or val_acc > stopper.best
+                ):
+                    import copy
+                    best_state = copy.deepcopy(model.state_dict())
+                if stopper(stop_metric):
+                    logger.info("Early stopping at epoch %d", epoch + 1)
+                    break
+
+        if best_state is not None:
+            model.load_state_dict(best_state)
 
         return history

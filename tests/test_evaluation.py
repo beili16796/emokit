@@ -21,12 +21,14 @@ from emokit.evaluation.config import (
     DatasetConfig,
     EvaluationConfig,
     ExperimentConfig,
+    FeaturePipelineConfig,
     FeatureStepConfig,
     FullConfig,
     ModelConfig,
 )
 from emokit.evaluation.protocols import (
     LOSOEvaluator,
+    MultiModelLOSOEvaluator,
     ResultLogger,
     SubjectDependentEvaluator,
     compute_metrics,
@@ -125,6 +127,11 @@ class LogRegModel(BaseModel):
         if arr.ndim > 2:
             arr = arr.reshape(arr.shape[0], -1)
         return self._clf.predict_proba(arr)
+
+
+@registry.register("_TestLogRegAlt")
+class LogRegAltModel(LogRegModel):
+    """Alternate logistic regression wrapper for multi-model resume tests."""
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +256,88 @@ class TestLOSOEvaluator:
         assert cfg["protocol"] == "loso"
         assert cfg["seed"] == 1
         assert cfg["model_name"] == "_TestLogReg"
+
+    def test_resume_skips_completed_folds(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ds = SyntheticDataset(n_subjects=3, n_trials_per_subject=20, seed=11)
+        pipeline = FeaturePipeline([("id", IdentityTransform())])
+        evaluator = LOSOEvaluator(
+            dataset=ds,
+            feature_pipeline=pipeline,
+            model_config={"n_classes": 2},
+            model_name="_TestLogReg",
+            seed=11,
+            output_config={"results_dir": str(tmp_path / "loso_resume"), "resume": True},
+        )
+        results = evaluator.run()
+        progress_path = tmp_path / "loso_resume" / "loso_progress.json"
+        assert progress_path.exists()
+
+        def _fail_fit(
+            self: LogRegModel, *args: Any, **kwargs: Any
+        ) -> dict[str, list[float]]:
+            raise AssertionError(
+                "fit() should not be called when LOSO progress already exists"
+            )
+
+        monkeypatch.setattr(LogRegModel, "fit", _fail_fit)
+        resumed = evaluator.run()
+        assert resumed["per_subject"] == results["per_subject"]
+
+
+class TestMultiModelLOSOEvaluator:
+    """Tests for the ``MultiModelLOSOEvaluator``."""
+
+    def test_separate_model_dirs_and_resume(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cfg = FullConfig(
+            experiment=ExperimentConfig(
+                name="multi_model_resume", seed=42, device="cpu"
+            ),
+            dataset=DatasetConfig(
+                name="SYNTHETIC",
+                root=None,
+                params={
+                    "n_subjects": 3,
+                    "n_trials": 12,
+                    "n_channels": 4,
+                    "n_classes": 2,
+                },
+            ),
+            feature_pipeline=FeaturePipelineConfig(steps=[]),
+            model_defaults={"n_classes": 2},
+            models_to_run=[
+                {"name": "_TestLogReg", "params": {}},
+                {"name": "_TestLogRegAlt", "params": {}},
+            ],
+            evaluation=EvaluationConfig(protocol="loso", val_fraction=0.2),
+            output={
+                "results_dir": str(tmp_path / "multi_model"),
+                "save_checkpoints": False,
+            },
+        )
+        evaluator = MultiModelLOSOEvaluator(cfg)
+        results = evaluator.run()
+
+        model_a_dir = tmp_path / "multi_model" / "_TestLogReg"
+        model_b_dir = tmp_path / "multi_model" / "_TestLogRegAlt"
+        assert model_a_dir.exists()
+        assert model_b_dir.exists()
+        assert (model_a_dir / "loso_progress.json").exists()
+        assert (model_b_dir / "loso_progress.json").exists()
+        assert (tmp_path / "multi_model" / "multimodel_progress.json").exists()
+        assert set(results["per_model"]) == {"_TestLogReg", "_TestLogRegAlt"}
+
+        def _fail_run(self: LOSOEvaluator) -> dict[str, Any]:
+            raise AssertionError(
+                "LOSOEvaluator.run() should not be called after multi-model resume"
+            )
+
+        monkeypatch.setattr(LOSOEvaluator, "run", _fail_run)
+        resumed = evaluator.run()
+        assert set(resumed["per_model"]) == {"_TestLogReg", "_TestLogRegAlt"}
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +517,39 @@ model:
         assert cfg.feature_pipeline.steps[0].name == "DEExtractor"
         assert cfg.feature_pipeline.steps[0].params["fs"] == 128
 
+    def test_cross_corpus_config(self, tmp_path: Path) -> None:
+        yaml_content = """\
+experiment:
+  name: cross_corpus_smoke
+dataset:
+  name: SEED
+  root: /tmp/data/SEED
+  modalities: [eeg]
+target_dataset:
+  name: DREAMER
+  root: /tmp/data/DREAMER
+  modalities: [eeg]
+  label_axis: valence
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params:
+        fs: 200
+model:
+  name: DGCNN
+evaluation:
+  protocol: cross_corpus
+  val_fraction: 0.1
+"""
+        cfg_path = tmp_path / "cross_corpus.yaml"
+        cfg_path.write_text(yaml_content, encoding="utf-8")
+
+        cfg = ConfigLoader.load(str(cfg_path))
+        assert cfg.evaluation.protocol == "cross_corpus"
+        assert cfg.dataset.name == "SEED"
+        assert cfg.target_dataset is not None
+        assert cfg.target_dataset.name == "DREAMER"
+
 
 # ---------------------------------------------------------------------------
 # Tests: ResultLogger
@@ -497,7 +619,7 @@ class TestResultLogger:
 class TestEdgeCases:
     """Edge-case tests for evaluation protocols."""
 
-    def test_single_subject_loso(self) -> None:
+    def test_single_subject_loso(self, tmp_path: Path) -> None:
         """LOSO with a single subject produces empty results (no train data)."""
         ds = SyntheticDataset(n_subjects=1, n_trials_per_subject=20, seed=0)
         pipeline = FeaturePipeline([("id", IdentityTransform())])
@@ -507,13 +629,14 @@ class TestEdgeCases:
             model_config={"n_classes": 2},
             model_name="_TestLogReg",
             seed=0,
+            output_config={"results_dir": str(tmp_path / "single_subject")},
         )
         results = evaluator.run()
         assert len(results["per_subject"]) == 0
         assert results["mean"] == {}
         assert results["std"] == {}
 
-    def test_imbalanced_classes(self) -> None:
+    def test_imbalanced_classes(self, tmp_path: Path) -> None:
         """Verify evaluator handles heavily imbalanced labels."""
         ds = SyntheticDataset(n_subjects=3, n_trials_per_subject=40, seed=77)
         for sid in ds._data:
@@ -529,6 +652,7 @@ class TestEdgeCases:
             model_config={"n_classes": 2},
             model_name="_TestLogReg",
             seed=77,
+            output_config={"results_dir": str(tmp_path / "imbalanced")},
         )
         results = evaluator.run()
         assert len(results["per_subject"]) == 3

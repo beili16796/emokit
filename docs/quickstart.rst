@@ -96,9 +96,43 @@ Create an experiment configuration file (or use the provided
 
 Then run the experiment from the command line::
 
-    python -m emokit --config configs/deap_loso_dgcnn.yaml
+    python -m emokit.run configs/deap_loso_dgcnn.yaml
 
 Results are saved to ``results/`` as JSON and CSV files.
+
+Cross-Corpus YAML
+-----------------
+
+For source-to-target transfer, use ``evaluation.protocol: cross_corpus`` and add
+``target_dataset``:
+
+.. code-block:: yaml
+
+    dataset:
+      name: SEED
+      root: ${EMOKIT_DATA_ROOT}/SEED
+      modalities: [eeg]
+
+    target_dataset:
+      name: DREAMER
+      root: ${EMOKIT_DATA_ROOT}/DREAMER
+      modalities: [eeg]
+      label_axis: valence
+
+    evaluation:
+      protocol: cross_corpus
+
+Run the provided example::
+
+    python -m emokit.run configs/cross_corpus_seed_to_dreamer_dgcnn.yaml
+
+Augmentation Ablation
+---------------------
+
+Training-time transforms such as ``FeatureMixup`` and
+``TemporalSegmentPermutation`` can be appended to the feature pipeline. A
+ready-to-run DGCNN configuration is provided at
+``configs/deap_loso_dgcnn_valence_augmented.yaml``.
 
 Understanding the Results
 -------------------------
@@ -125,5 +159,6 @@ Next Steps
 - Try different models: ``CNN-LSTM``, ``Transformer-MM``, ``BiDAE``,
   ``DGCCA-AM``, ``PR-PL``.
 - Add peripheral features with :class:`~emokit.features.peripheral` extractors.
+- Run cross-corpus transfer with ``evaluation.protocol: cross_corpus``.
 - Write custom transforms by subclassing
   :class:`~emokit.features.base.BaseTransform`.

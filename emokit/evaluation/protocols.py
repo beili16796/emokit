@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-import copy
 import csv
+import copy
 import inspect
 import json
 import logging
@@ -55,17 +55,15 @@ def compute_metrics(
 
 
 def _stratified_val_split(
-    X: np.ndarray | dict[str, np.ndarray],
+    X: np.ndarray,
     y: np.ndarray,
     val_fraction: float = 0.1,
     seed: int = 42,
-) -> tuple[Any, np.ndarray, Any, np.ndarray | None]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Split arrays into train and validation sets with stratification.
 
-    Supports both plain arrays and modality dicts.
-
     Args:
-        X: Feature array or dict of modality arrays.
+        X: Feature array.
         y: Label array.
         val_fraction: Fraction reserved for validation.
         seed: Random seed.
@@ -76,19 +74,10 @@ def _stratified_val_split(
     if val_fraction <= 0 or len(np.unique(y)) < 2 or len(y) < 4:
         return X, y, None, None  # type: ignore[return-value]
 
-    ref = next(iter(X.values())) if isinstance(X, dict) else X
     splitter = StratifiedShuffleSplit(
         n_splits=1, test_size=val_fraction, random_state=seed
     )
-    train_idx, val_idx = next(splitter.split(ref, y))
-
-    if isinstance(X, dict):
-        return (
-            _split_dict(X, train_idx),
-            y[train_idx],
-            _split_dict(X, val_idx),
-            y[val_idx],
-        )
+    train_idx, val_idx = next(splitter.split(X, y))
     return X[train_idx], y[train_idx], X[val_idx], y[val_idx]
 
 
@@ -125,11 +114,6 @@ class LOSOEvaluator:
     def run(self) -> dict[str, Any]:
         """Execute LOSO evaluation over all subjects.
 
-        Supports both unimodal (flat array) and multimodal (dict of arrays)
-        models.  When the target model has ``multimodal = True``, per-subject
-        data is stored as ``dict[str, np.ndarray]`` keyed by modality name
-        so that the model receives the input format it expects.
-
         Returns:
             Dict with ``per_subject``, ``mean``, ``std``, and ``config``.
         """
@@ -148,10 +132,32 @@ class LOSOEvaluator:
                 continue
             subject_data[sid] = raw
 
+        results_dir = Path(self.output_config.get("results_dir", "results"))
+        results_dir.mkdir(parents=True, exist_ok=True)
+        progress_path = results_dir / "loso_progress.json"
         per_subject: dict[int, dict[str, Any]] = {}
         per_subject_raw_preds: dict[int, dict[str, list]] = {}
+        if self.output_config.get("resume", False) and progress_path.exists():
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            per_subject = {
+                int(sid): metrics
+                for sid, metrics in progress.get("per_subject", {}).items()
+            }
+            per_subject_raw_preds = {
+                int(sid): preds
+                for sid, preds in progress.get("per_subject_raw_preds", {}).items()
+            }
+            if per_subject:
+                logger.info(
+                    "Resuming LOSO with %d completed subjects from %s",
+                    len(per_subject),
+                    progress_path,
+                )
 
         for test_sid in subject_data:
+            if test_sid in per_subject:
+                logger.info("Skipping completed LOSO fold: test subject = %d", test_sid)
+                continue
             logger.info("LOSO fold: test subject = %d", test_sid)
 
             test_raw = subject_data[test_sid]
@@ -204,10 +210,7 @@ class LOSOEvaluator:
                 model.fit(X_tr, y_tr, X_val, y_val)
 
             if self.output_config.get("save_checkpoints", False):
-                ckpt_dir = (
-                    Path(self.output_config.get("results_dir", "results"))
-                    / "checkpoints"
-                )
+                ckpt_dir = Path(self.output_config.get("results_dir", "results")) / "checkpoints"
                 ckpt_dir.mkdir(parents=True, exist_ok=True)
                 ckpt_path = ckpt_dir / f"subject_{int(test_sid):02d}_best.pt"
                 model.save(str(ckpt_path))
@@ -219,6 +222,17 @@ class LOSOEvaluator:
                 "y_true": y_test.tolist(),
                 "y_pred": y_pred.tolist(),
             }
+            progress_path.write_text(
+                json.dumps(
+                    {
+                        "per_subject": per_subject,
+                        "per_subject_raw_preds": per_subject_raw_preds,
+                    },
+                    indent=2,
+                    default=float,
+                ),
+                encoding="utf-8",
+            )
             logger.info(
                 "Subject %d — acc=%.4f  f1=%.4f",
                 test_sid,
@@ -246,10 +260,7 @@ class LOSOEvaluator:
             final_model = build_model(self.model_name, self.model_config)
             all_raws = [subject_data[sid] for sid in sorted(subject_data)]
             all_labels = np.concatenate(
-                [
-                    np.asarray(subject_data[sid]["labels"])
-                    for sid in sorted(subject_data)
-                ],
+                [np.asarray(subject_data[sid]["labels"]) for sid in sorted(subject_data)],
                 axis=0,
             )
             final_pipeline = _clone_pipeline(self.feature_pipeline)
@@ -262,10 +273,7 @@ class LOSOEvaluator:
                 model_config=self.model_config,
             )
             final_model.fit(X_all, all_labels)
-            final_path = (
-                Path(self.output_config.get("results_dir", "results"))
-                / "final_model.pt"
-            )
+            final_path = Path(self.output_config.get("results_dir", "results")) / "final_model.pt"
             final_model.save(str(final_path))
         return result
 
@@ -309,6 +317,7 @@ class MultiModelLOSOEvaluator:
 
     def run(self) -> dict[str, Any]:
         from emokit.datasets import load_dataset
+        from emokit.datasets.base import _REGISTRY
 
         ds_kwargs: dict[str, Any] = {"root": self.cfg.dataset.root}
         if self.cfg.dataset.subjects is not None:
@@ -319,29 +328,54 @@ class MultiModelLOSOEvaluator:
             ds_kwargs["overlap"] = self.cfg.dataset.overlap
         if self.cfg.dataset.modalities is not None:
             ds_kwargs["modalities"] = self.cfg.dataset.modalities
-        if (
-            self.cfg.dataset.label_axis is not None
-            and self.cfg.dataset.name != "SYNTHETIC"
-        ):
-            ds_kwargs["label_axis"] = self.cfg.dataset.label_axis
+        if self.cfg.dataset.label_axis is not None:
+            ds_cls = _REGISTRY.get(self.cfg.dataset.name)
+            if ds_cls and "label_axis" in inspect.signature(ds_cls.__init__).parameters:
+                ds_kwargs["label_axis"] = self.cfg.dataset.label_axis
         if hasattr(self.cfg.dataset, "params") and self.cfg.dataset.params:
             ds_kwargs.update(self.cfg.dataset.params)
         dataset = load_dataset(self.cfg.dataset.name, **ds_kwargs)
 
+        exp_device = getattr(self.cfg.experiment, "device", "cpu")
+
+        base_output = dict(self.cfg.output.model_dump())
+        base_results_dir = Path(base_output.get("results_dir", "results"))
+        base_results_dir.mkdir(parents=True, exist_ok=True)
+        progress_path = base_results_dir / "multimodel_progress.json"
         per_model_results: dict[str, Any] = {}
+        if progress_path.exists():
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            per_model_results = dict(progress.get("per_model", {}))
+            if per_model_results:
+                logger.info(
+                    "Resuming multi-model LOSO with %d completed models from %s",
+                    len(per_model_results),
+                    progress_path,
+                )
         for model_spec in self.cfg.models_to_run:
+            if model_spec.name in per_model_results:
+                logger.info("Skipping completed multi-model LOSO: %s", model_spec.name)
+                continue
             logger.info("Running multi-model LOSO: %s", model_spec.name)
+            merged_params = {
+                **(self.cfg.model_defaults or {}),
+                **(model_spec.params or {}),
+            }
+            if "device" not in merged_params:
+                merged_params["device"] = exp_device
+            model_dir = base_results_dir / model_spec.name.replace("/", "_").replace(" ", "_")
+            output_config = {
+                **base_output,
+                "results_dir": str(model_dir),
+            }
             evaluator = LOSOEvaluator(
                 dataset=dataset,
                 feature_pipeline=_build_pipeline_from_config(self.cfg.feature_pipeline),
-                model_config={
-                    **(self.cfg.model_defaults or {}),
-                    **(model_spec.params or {}),
-                },
+                model_config=merged_params,
                 model_name=model_spec.name,
                 seed=self.cfg.experiment.seed,
                 val_fraction=self.cfg.evaluation.val_fraction,
-                output_config=dict(self.cfg.output.model_dump()),
+                output_config=output_config,
             )
             result = evaluator.run()
             per_model_results[model_spec.name] = {
@@ -350,6 +384,10 @@ class MultiModelLOSOEvaluator:
                 "mean_f1": result.get("mean", {}).get("f1_macro", 0.0),
                 "per_subject": result.get("per_subject", {}),
             }
+            progress_path.write_text(
+                json.dumps({"per_model": per_model_results}, indent=2, default=float),
+                encoding="utf-8",
+            )
 
         mean_accs = [item["mean_acc"] for item in per_model_results.values()]
         return {
@@ -527,7 +565,7 @@ class SessionEvaluator:
 
         if len(sessions) < 2:
             raise EmoKitConfigError(
-                f"SessionEvaluator requires at least 2 sessions, got {len(sessions)}"
+                "SessionEvaluator requires at least 2 sessions, " f"got {len(sessions)}"
             )
 
         train_sessions = sessions[:-1]
@@ -707,24 +745,6 @@ class ResultLogger:
 # ---------------------------------------------------------------------------
 
 
-def _peek_model_cls(model_name: str) -> type:
-    """Look up a model class without instantiating it."""
-    from emokit.models.base import registry as model_registry
-
-    return model_registry[model_name]
-
-
-def _concat_dicts(dicts: list[dict[str, np.ndarray]]) -> dict[str, np.ndarray]:
-    """Concatenate a list of modality dicts along axis 0."""
-    keys = dicts[0].keys()
-    return {k: np.concatenate([d[k] for d in dicts], axis=0) for k in keys}
-
-
-def _split_dict(X: dict[str, np.ndarray], idx: np.ndarray) -> dict[str, np.ndarray]:
-    """Index into each array of a modality dict."""
-    return {k: v[idx] for k, v in X.items()}
-
-
 def _clone_pipeline(pipeline: FeaturePipeline) -> FeaturePipeline:
     """Deep-copy a pipeline so fitted state is not shared across folds."""
     return copy.deepcopy(pipeline)
@@ -776,11 +796,7 @@ def _build_pipeline_from_config(cfg: Any) -> FeaturePipeline:
 
 
 def _concat_raw(train_raws: list[dict[str, np.ndarray]], key: str) -> np.ndarray | None:
-    arrays = [
-        np.asarray(raw[key])
-        for raw in train_raws
-        if key in raw and raw[key] is not None
-    ]
+    arrays = [np.asarray(raw[key]) for raw in train_raws if key in raw and raw[key] is not None]
     if not arrays:
         return None
     return np.concatenate(arrays, axis=0)
@@ -794,26 +810,14 @@ def _extract_gsr_features(
     from emokit.features import GSRExtractor
 
     train_gsr = _concat_raw(train_raws, "gsr")
-    test_gsr = (
-        np.asarray(test_raw["gsr"])
-        if "gsr" in test_raw and test_raw["gsr"] is not None
-        else None
-    )
+    test_gsr = np.asarray(test_raw["gsr"]) if "gsr" in test_raw and test_raw["gsr"] is not None else None
     extractor = GSRExtractor()
     if train_gsr is None:
         n_train = sum(len(np.asarray(raw["labels"])) for raw in train_raws)
         n_test = len(np.asarray(test_raw["labels"]))
-        return np.zeros((n_train, target_dim), dtype=np.float32), np.zeros(
-            (n_test, target_dim), dtype=np.float32
-        )
+        return np.zeros((n_train, target_dim), dtype=np.float32), np.zeros((n_test, target_dim), dtype=np.float32)
     train_feat = extractor.transform(train_gsr)
-    test_feat = (
-        extractor.transform(test_gsr)
-        if test_gsr is not None
-        else np.zeros(
-            (len(np.asarray(test_raw["labels"])), target_dim), dtype=np.float32
-        )
-    )
+    test_feat = extractor.transform(test_gsr) if test_gsr is not None else np.zeros((len(np.asarray(test_raw["labels"])), target_dim), dtype=np.float32)
     return _pad_features(train_feat, target_dim), _pad_features(test_feat, target_dim)
 
 
@@ -825,27 +829,41 @@ def _extract_ecg_features(
     from emokit.features import HRVExtractor
 
     train_ecg = _concat_raw(train_raws, "ecg")
-    test_ecg = (
-        np.asarray(test_raw["ecg"])
-        if "ecg" in test_raw and test_raw["ecg"] is not None
-        else None
-    )
+    test_ecg = np.asarray(test_raw["ecg"]) if "ecg" in test_raw and test_raw["ecg"] is not None else None
     extractor = HRVExtractor()
     if train_ecg is None:
         n_train = sum(len(np.asarray(raw["labels"])) for raw in train_raws)
         n_test = len(np.asarray(test_raw["labels"]))
-        return np.zeros((n_train, target_dim), dtype=np.float32), np.zeros(
+        return np.zeros((n_train, target_dim), dtype=np.float32), np.zeros((n_test, target_dim), dtype=np.float32)
+    train_feat = extractor.transform(train_ecg)
+    test_feat = extractor.transform(test_ecg) if test_ecg is not None else np.zeros((len(np.asarray(test_raw["labels"])), target_dim), dtype=np.float32)
+    return _pad_features(train_feat, target_dim), _pad_features(test_feat, target_dim)
+
+
+def _extract_existing_features(
+    train_raws: list[dict[str, np.ndarray]],
+    test_raw: dict[str, np.ndarray],
+    key: str,
+    target_dim: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Use already-extracted 2-D modality features when available."""
+    train_feat = _concat_raw(train_raws, key)
+    test_feat = (
+        np.asarray(test_raw[key])
+        if key in test_raw and test_raw[key] is not None
+        else None
+    )
+    if train_feat is None:
+        n_train = sum(len(np.asarray(raw["labels"])) for raw in train_raws)
+        n_test = len(np.asarray(test_raw["labels"]))
+        zeros = np.zeros
+        return zeros((n_train, target_dim), dtype=np.float32), zeros(
             (n_test, target_dim), dtype=np.float32
         )
-    train_feat = extractor.transform(train_ecg)
-    test_feat = (
-        extractor.transform(test_ecg)
-        if test_ecg is not None
-        else np.zeros(
-            (len(np.asarray(test_raw["labels"])), target_dim), dtype=np.float32
-        )
+    return _pad_features(train_feat, target_dim), _pad_features(
+        test_feat if test_feat is not None else np.zeros((len(np.asarray(test_raw["labels"])), target_dim), dtype=np.float32),
+        target_dim,
     )
-    return _pad_features(train_feat, target_dim), _pad_features(test_feat, target_dim)
 
 
 def _pad_features(X: np.ndarray, target_dim: int) -> np.ndarray:
@@ -871,11 +889,7 @@ def _prepare_model_features(
 ) -> tuple[Any, Any]:
     """Build model-specific train/test inputs from raw modality arrays."""
     train_eeg = _concat_raw(train_raws, "eeg")
-    test_eeg = (
-        np.asarray(test_raw["eeg"])
-        if "eeg" in test_raw and test_raw["eeg"] is not None
-        else None
-    )
+    test_eeg = np.asarray(test_raw["eeg"]) if "eeg" in test_raw and test_raw["eeg"] is not None else None
 
     eeg_train_feat = None
     eeg_test_feat = None
@@ -905,16 +919,15 @@ def _prepare_model_features(
     if model_name == "BiDAE":
         assert eeg_train_feat is not None and eeg_test_feat is not None
         mod2_dim = int(model_config.get("n_feat2", model_config.get("n_feat_mod2", 3)))
-        gsr_train, gsr_test = _extract_gsr_features(train_raws, test_raw, mod2_dim)
+        if any("eog" in raw for raw in train_raws) or "eog" in test_raw:
+            gsr_train, gsr_test = _extract_existing_features(
+                train_raws, test_raw, "eog", mod2_dim
+            )
+        else:
+            gsr_train, gsr_test = _extract_gsr_features(train_raws, test_raw, mod2_dim)
         return (
-            {
-                "mod1": eeg_train_feat.reshape(eeg_train_feat.shape[0], -1),
-                "mod2": gsr_train,
-            },
-            {
-                "mod1": eeg_test_feat.reshape(eeg_test_feat.shape[0], -1),
-                "mod2": gsr_test,
-            },
+            {"mod1": eeg_train_feat.reshape(eeg_train_feat.shape[0], -1), "mod2": gsr_train},
+            {"mod1": eeg_test_feat.reshape(eeg_test_feat.shape[0], -1), "mod2": gsr_test},
         )
 
     if model_name == "DGCCA-AM":
@@ -939,18 +952,23 @@ def _prepare_model_features(
     if model_name == "Transformer-MM":
         assert eeg_train_feat is not None and eeg_test_feat is not None
         periph_dim = int(model_config.get("n_peripheral_feat", 7))
-        gsr_train, gsr_test = _extract_gsr_features(
-            train_raws, test_raw, min(3, periph_dim)
-        )
-        ecg_train, ecg_test = _extract_ecg_features(
-            train_raws, test_raw, max(periph_dim - gsr_train.shape[1], 0)
-        )
-        periph_train = _pad_features(
-            np.concatenate([gsr_train, ecg_train], axis=1), periph_dim
-        )
-        periph_test = _pad_features(
-            np.concatenate([gsr_test, ecg_test], axis=1), periph_dim
-        )
+        if any("eog" in raw for raw in train_raws) or "eog" in test_raw:
+            periph_train, periph_test = _extract_existing_features(
+                train_raws, test_raw, "eog", periph_dim
+            )
+        else:
+            gsr_train, gsr_test = _extract_gsr_features(
+                train_raws, test_raw, min(3, periph_dim)
+            )
+            ecg_train, ecg_test = _extract_ecg_features(
+                train_raws, test_raw, max(periph_dim - gsr_train.shape[1], 0)
+            )
+            periph_train = _pad_features(
+                np.concatenate([gsr_train, ecg_train], axis=1), periph_dim
+            )
+            periph_test = _pad_features(
+                np.concatenate([gsr_test, ecg_test], axis=1), periph_dim
+            )
         return (
             {"eeg": eeg_train_feat, "peripheral": periph_train},
             {"eeg": eeg_test_feat, "peripheral": periph_test},
@@ -990,6 +1008,8 @@ def _run_from_full_config(cfg: Any, protocol_cls: type) -> dict[str, Any]:
 
     from emokit.datasets import load_dataset
 
+    from emokit.datasets.base import _REGISTRY as _DS_REGISTRY
+
     ds_kwargs: dict[str, Any] = {"root": cfg.dataset.root}
     if cfg.dataset.subjects is not None:
         ds_kwargs["subjects"] = cfg.dataset.subjects
@@ -999,167 +1019,28 @@ def _run_from_full_config(cfg: Any, protocol_cls: type) -> dict[str, Any]:
         ds_kwargs["overlap"] = cfg.dataset.overlap
     if cfg.dataset.modalities is not None:
         ds_kwargs["modalities"] = cfg.dataset.modalities
-    if cfg.dataset.label_axis is not None and cfg.dataset.name != "SYNTHETIC":
-        ds_kwargs["label_axis"] = cfg.dataset.label_axis
+    if cfg.dataset.label_axis is not None:
+        ds_cls = _DS_REGISTRY.get(cfg.dataset.name)
+        if ds_cls and "label_axis" in inspect.signature(ds_cls.__init__).parameters:
+            ds_kwargs["label_axis"] = cfg.dataset.label_axis
     if hasattr(cfg.dataset, "params") and cfg.dataset.params:
         ds_kwargs.update(cfg.dataset.params)
     dataset = load_dataset(cfg.dataset.name, **ds_kwargs)
 
+    model_params = dict(cfg.model.params or {})
+    if "device" not in model_params and hasattr(cfg.experiment, "device"):
+        model_params["device"] = cfg.experiment.device
+
     evaluator = protocol_cls(
         dataset=dataset,
         feature_pipeline=_build_pipeline_from_config(cfg.feature_pipeline),
-        model_config=cfg.model.params or {},
+        model_config=model_params,
         model_name=cfg.model.name,
         seed=cfg.experiment.seed,
         val_fraction=cfg.evaluation.val_fraction,
         output_config=dict(cfg.output.model_dump()),
     )
     return evaluator.run()
-
-
-class CrossCorpusEvaluator:
-    """Cross-corpus generalisation evaluator.
-
-    Trains on *all* subjects of ``source_dataset`` and evaluates per-subject
-    on ``target_dataset``.  When the two corpora have different EEG montages,
-    channels are automatically aligned using the International 10-20 system.
-
-    This protocol is essential for validating domain generalisation claims
-    in affective computing papers (e.g. training on SEED → testing on DREAMER).
-
-    Args:
-        source_dataset: Dataset to train on (all subjects).
-        target_dataset: Dataset to evaluate on (per-subject metrics).
-        feature_pipeline: Shared feature extraction pipeline.
-        model_config: Config dict forwarded to the model constructor.
-        model_name: Registered model name.
-        seed: Global random seed.
-        val_fraction: Fraction of source data held out for validation.
-    """
-
-    def __init__(
-        self,
-        source_dataset: BaseDataset,
-        target_dataset: BaseDataset,
-        feature_pipeline: FeaturePipeline,
-        model_config: dict[str, Any],
-        model_name: str,
-        seed: int = 42,
-        val_fraction: float = 0.1,
-    ) -> None:
-        self.source_dataset = source_dataset
-        self.target_dataset = target_dataset
-        self.feature_pipeline = feature_pipeline
-        self.model_config = model_config
-        self.model_name = model_name
-        self.seed = seed
-        self.val_fraction = val_fraction
-
-    def _align_if_needed(
-        self, X: np.ndarray, src_names: list[str], tgt_names: list[str]
-    ) -> np.ndarray:
-        """Subset source channels to match target montage if different."""
-        if len(src_names) == len(tgt_names):
-            return X
-        from emokit.features.channel_align import subset_features
-
-        return subset_features(X, src_names, tgt_names)
-
-    def run(self) -> dict[str, Any]:
-        """Train on source corpus, evaluate per-subject on target.
-
-        Returns:
-            Dict with ``per_subject``, ``mean``, ``std``, ``config``.
-        """
-        set_seed(self.seed)
-        src_ch = self.source_dataset.get_channel_names("eeg")
-        tgt_ch = self.target_dataset.get_channel_names("eeg")
-        do_align = len(src_ch) != len(tgt_ch)
-
-        if do_align:
-            logger.info(
-                "Channel alignment: %d-ch source → %d-ch target",
-                len(src_ch),
-                len(tgt_ch),
-            )
-
-        # --- Collect source data ---
-        src_ids = self.source_dataset.get_subject_ids()
-        src_Xs: list[np.ndarray] = []
-        src_ys: list[np.ndarray] = []
-        for sid in src_ids:
-            raw = self.source_dataset.read_raw(sid)
-            eeg = raw.get("eeg")
-            if eeg is None or "labels" not in raw:
-                continue
-            if eeg.ndim == 3:
-                eeg = eeg.reshape(eeg.shape[0], -1)
-            src_Xs.append(eeg)
-            src_ys.append(np.asarray(raw["labels"]))
-
-        if not src_Xs:
-            raise EmoKitConfigError("No source data loaded")
-
-        X_src = np.concatenate(src_Xs, axis=0)
-        y_src = np.concatenate(src_ys, axis=0)
-
-        # --- Collect target data (per-subject) ---
-        tgt_ids = self.target_dataset.get_subject_ids()
-        tgt_data: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-        for sid in tgt_ids:
-            raw = self.target_dataset.read_raw(sid)
-            eeg = raw.get("eeg")
-            if eeg is None or "labels" not in raw:
-                continue
-            if eeg.ndim == 3:
-                eeg = eeg.reshape(eeg.shape[0], -1)
-            tgt_data[sid] = (eeg, np.asarray(raw["labels"]))
-
-        # --- Feature pipeline ---
-        pipeline = _clone_pipeline(self.feature_pipeline)
-        X_src_feat = pipeline.fit_transform(X_src, y_src)
-
-        # Channel alignment on feature space
-        if do_align and X_src_feat.ndim >= 2:
-            X_src_feat = self._align_if_needed(X_src_feat, src_ch, tgt_ch)
-
-        # --- Train/val split ---
-        X_tr, y_tr, X_val, y_val = _stratified_val_split_any(
-            X_src_feat, y_src, self.val_fraction, self.seed
-        )
-
-        model = build_model(self.model_name, self.model_config)
-        model.fit(X_tr, y_tr, X_val, y_val)
-
-        # --- Evaluate per target subject ---
-        per_subject: dict[int, dict[str, Any]] = {}
-        for sid, (X_tgt_raw, y_tgt) in tgt_data.items():
-            X_tgt_feat = pipeline.transform(X_tgt_raw)
-            if do_align and X_tgt_feat.ndim >= 2:
-                X_tgt_feat = self._align_if_needed(X_tgt_feat, tgt_ch, tgt_ch)
-            y_pred = model.predict(X_tgt_feat)
-            metrics = compute_metrics(y_tgt, y_pred)
-            per_subject[sid] = metrics
-            logger.info(
-                "Target subject %d — acc=%.4f f1=%.4f",
-                sid,
-                metrics["accuracy"],
-                metrics["f1_macro"],
-            )
-
-        return _aggregate_results(
-            per_subject,
-            config={
-                "source_dataset": type(self.source_dataset).__name__,
-                "target_dataset": type(self.target_dataset).__name__,
-                "model_name": self.model_name,
-                "seed": self.seed,
-                "protocol": "cross_corpus",
-                "channel_alignment": do_align,
-                "source_channels": len(src_ch),
-                "target_channels": len(tgt_ch),
-            },
-        )
 
 
 def _json_default(obj: Any) -> Any:
@@ -1171,3 +1052,13 @@ def _json_default(obj: Any) -> Any:
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+# Backward-compatible lazy export for callers that import the cross-corpus
+# evaluator from this module.  The actual implementation lives in
+# emokit.evaluation.cross_corpus to avoid growing this protocol module further.
+def __getattr__(name: str) -> Any:
+    if name == "CrossCorpusEvaluator":
+        from emokit.evaluation.cross_corpus import CrossCorpusEvaluator
+
+        return CrossCorpusEvaluator
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

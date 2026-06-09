@@ -149,6 +149,16 @@ def _make_dry_run_cfg(cfg: Any, dataset_key: str, *, mock_run: bool = False) -> 
     return cfg
 
 
+_DATASET_ALIASES: dict[str, str] = {
+    "deap": "DEAP",
+    "seedv": "SEED-V",
+    "seed-v": "SEED-V",
+    "seed_v": "SEED-V",
+    "seed": "SEED",
+    "dreamer": "DREAMER",
+}
+
+
 def _override_roots(cfg: Any, args: argparse.Namespace, dataset_key: str) -> Any:
     mock = getattr(args, "mock_run", False)
     if args.dry_run or mock:
@@ -161,12 +171,16 @@ def _override_roots(cfg: Any, args: argparse.Namespace, dataset_key: str) -> Any
         dataset_root = args.seedv_root
     elif dataset_key == "SEED":
         dataset_root = args.seed_root
-    if dataset_key == "DREAMER":
+    elif dataset_key == "DREAMER":
         dataset_root = args.dreamer_root
+
+    updates: dict[str, Any] = {}
     if dataset_root:
-        return cfg.model_copy(
-            update={"dataset": cfg.dataset.model_copy(update={"root": dataset_root})}
-        )
+        updates["dataset"] = cfg.dataset.model_copy(update={"root": dataset_root})
+    if args.device:
+        updates["experiment"] = cfg.experiment.model_copy(update={"device": args.device})
+    if updates:
+        return cfg.model_copy(update=updates)
     return cfg
 
 
@@ -301,10 +315,17 @@ def _check_paper_claims(results: dict[str, Any]) -> None:
                         .get("per_model", {})
                         .get(model, {})
                         .get("mean_acc", 0.0)
-                    }
+                    },
+                    "config": results.get("ALL/SEED-V/5class", {}).get("config", {}),
                 }
             if result is None:
                 print(f"MISSING {exp_key}")
+                continue
+            if dataset == "SEEDV" and result.get("config", {}).get("protocol") == "loso":
+                print(
+                    f"{model:15s} {metric_key:18s} "
+                    "[SKIP: protocol mismatch, paper uses subject-dependent split]"
+                )
                 continue
             ours = result.get("mean", {}).get("accuracy", 0.0) * 100
             delta = abs(ours - paper_val)
@@ -329,7 +350,13 @@ def run_all(args: argparse.Namespace) -> None:
         results_all = json.loads(results_path.read_text(encoding="utf-8"))
         logger.info("Resuming with %d finished experiments", len(results_all))
 
-    for cfg_path, dataset_key, _axis, exp_key in EXPERIMENTS:
+    experiments = EXPERIMENTS
+    if args.datasets:
+        allowed = {_DATASET_ALIASES.get(d.lower(), d.upper()) for d in args.datasets}
+        experiments = [exp for exp in EXPERIMENTS if exp[1] in allowed]
+        logger.info("Filtered to datasets %s (%d experiments)", allowed, len(experiments))
+
+    for cfg_path, dataset_key, _axis, exp_key in experiments:
         if exp_key in results_all:
             logger.info("Skipping completed run: %s", exp_key)
             continue
@@ -393,6 +420,13 @@ def main() -> None:
     parser.add_argument("--seed-root", default=None)
     parser.add_argument("--dreamer-root", default=None)
     parser.add_argument("--output-dir", default="results/paper_experiments")
+    parser.add_argument(
+        "--datasets",
+        nargs="+",
+        default=None,
+        help="Filter experiments to specific datasets (e.g. deap seedv dreamer)",
+    )
+    parser.add_argument("--device", default=None, help="Override device (e.g. cuda, cpu)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--mock-run",

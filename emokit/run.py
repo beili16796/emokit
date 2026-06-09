@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from emokit.evaluation.config import ConfigLoader, FullConfig
+from emokit.evaluation.cross_corpus import CrossCorpusEvaluator
 from emokit.evaluation.protocols import (
     LOSOEvaluator,
     ResultLogger,
@@ -25,32 +26,45 @@ _PROTOCOL_MAP: dict[str, type] = {
     "loso": LOSOEvaluator,
     "subject_dependent": SubjectDependentEvaluator,
     "session": SessionEvaluator,
+    "cross_corpus": CrossCorpusEvaluator,
 }
+
+
+def _dataset_kwargs(dataset_cfg: Any) -> dict[str, Any]:
+    """Convert a dataset config block into ``load_dataset`` keyword arguments."""
+    ds_kwargs: dict[str, Any] = {"root": dataset_cfg.root}
+    if dataset_cfg.subjects is not None:
+        ds_kwargs["subjects"] = dataset_cfg.subjects
+    if dataset_cfg.window_sec is not None:
+        ds_kwargs["window_sec"] = dataset_cfg.window_sec
+    if dataset_cfg.overlap is not None:
+        ds_kwargs["overlap"] = dataset_cfg.overlap
+    if dataset_cfg.modalities is not None:
+        ds_kwargs["modalities"] = dataset_cfg.modalities
+    if dataset_cfg.label_axis is not None:
+        ds_kwargs["label_axis"] = dataset_cfg.label_axis
+    if hasattr(dataset_cfg, "params") and dataset_cfg.params:
+        ds_kwargs.update(dataset_cfg.params)
+    return ds_kwargs
 
 
 def _build_evaluator(
     cfg: FullConfig,
-) -> LOSOEvaluator | SubjectDependentEvaluator | SessionEvaluator:
+) -> (
+    LOSOEvaluator
+    | SubjectDependentEvaluator
+    | SessionEvaluator
+    | CrossCorpusEvaluator
+):
     """Instantiate dataset, feature pipeline, and the correct evaluator."""
     from emokit.datasets import load_dataset
     from emokit.features.base import GLOBAL_REGISTRY as TRANSFORM_REGISTRY
     from emokit.features.base import FeaturePipeline
 
-    ds_kwargs: dict[str, Any] = {"root": cfg.dataset.root}
-    if cfg.dataset.subjects is not None:
-        ds_kwargs["subjects"] = cfg.dataset.subjects
-    if cfg.dataset.window_sec is not None:
-        ds_kwargs["window_sec"] = cfg.dataset.window_sec
-    if cfg.dataset.overlap is not None:
-        ds_kwargs["overlap"] = cfg.dataset.overlap
-    if cfg.dataset.modalities is not None:
-        ds_kwargs["modalities"] = cfg.dataset.modalities
-    if cfg.dataset.label_axis is not None:
-        ds_kwargs["label_axis"] = cfg.dataset.label_axis
-    if hasattr(cfg.dataset, "params") and cfg.dataset.params:
-        ds_kwargs.update(cfg.dataset.params)
+    if cfg.model is None:
+        raise ValueError("Single-model runner requires a 'model' section.")
 
-    dataset = load_dataset(cfg.dataset.name, **ds_kwargs)
+    dataset = load_dataset(cfg.dataset.name, **_dataset_kwargs(cfg.dataset))
 
     steps: list[tuple[str, Any]] = []
     for step_cfg in cfg.feature_pipeline.steps:
@@ -65,14 +79,40 @@ def _build_evaluator(
             f"Unknown protocol '{protocol}'. Available: {sorted(_PROTOCOL_MAP.keys())}"
         )
 
-    return evaluator_cls(
-        dataset=dataset,
-        feature_pipeline=pipeline,
-        model_config=cfg.model.params or {},
-        model_name=cfg.model.name,
-        seed=cfg.experiment.seed,
-        val_fraction=cfg.evaluation.val_fraction,
-    )
+    model_params = dict(cfg.model.params or {})
+    if "device" not in model_params and hasattr(cfg.experiment, "device"):
+        model_params["device"] = cfg.experiment.device
+
+    if protocol == "cross_corpus":
+        if cfg.target_dataset is None:
+            raise ValueError(
+                "cross_corpus protocol requires a top-level 'target_dataset' block."
+            )
+        target_dataset = load_dataset(
+            cfg.target_dataset.name,
+            **_dataset_kwargs(cfg.target_dataset),
+        )
+        return CrossCorpusEvaluator(
+            source_dataset=dataset,
+            target_dataset=target_dataset,
+            feature_pipeline=pipeline,
+            model_config=model_params,
+            model_name=cfg.model.name,
+            seed=cfg.experiment.seed,
+            val_fraction=cfg.evaluation.val_fraction,
+        )
+
+    evaluator_kwargs = {
+        "dataset": dataset,
+        "feature_pipeline": pipeline,
+        "model_config": model_params,
+        "model_name": cfg.model.name,
+        "seed": cfg.experiment.seed,
+        "val_fraction": cfg.evaluation.val_fraction,
+    }
+    if protocol == "loso":
+        evaluator_kwargs["output_config"] = dict(cfg.output.model_dump())
+    return evaluator_cls(**evaluator_kwargs)
 
 
 def _print_summary(results: dict[str, Any]) -> None:

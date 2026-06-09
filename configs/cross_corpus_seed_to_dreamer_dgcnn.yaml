@@ -1,0 +1,54 @@
+experiment:
+  name: cross_corpus_seed_to_dreamer_dgcnn
+  seed: 42
+  device: cpu
+
+dataset:
+  name: SEED
+  root: ${EMOKIT_DATA_ROOT}/SEED
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+
+target_dataset:
+  name: DREAMER
+  root: ${EMOKIT_DATA_ROOT}/DREAMER
+  subjects: null
+  window_sec: 4.0
+  overlap: 0.5
+  modalities: [eeg]
+  label_axis: valence
+
+feature_pipeline:
+  steps:
+    - name: DEExtractor
+      params:
+        fs: 200
+        bands:
+          delta: [1, 4]
+          theta: [4, 8]
+          alpha: [8, 13]
+          beta: [13, 30]
+          gamma: [30, 45]
+    - name: EEGNormalizer
+      params: {}
+
+model:
+  name: DGCNN
+  params:
+    n_channels: 14
+    n_bands: 5
+    hidden_dim: 64
+    lr: 0.001
+    batch_size: 64
+    n_epochs: 50
+    lambda_reg: 0.0001
+
+evaluation:
+  protocol: cross_corpus
+  val_fraction: 0.1
+
+output:
+  results_dir: results/cross_corpus_seed_to_dreamer_dgcnn
+  save_checkpoints: false

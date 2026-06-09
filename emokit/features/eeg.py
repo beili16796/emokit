@@ -86,6 +86,9 @@ class DEExtractor(BaseTransform):
         assert X.ndim == 3, f"Expected (N,C,T), got {X.shape}"
         n, c, _t = X.shape
         n_bands = len(self.bands)
+        if _t == n_bands:
+            logger.info("Detected pre-extracted DE features; skipping filtering.")
+            return np.asarray(X, dtype=np.float32)
         de = np.empty((n, c, n_bands), dtype=np.float32)
 
         for b_idx, (band_name, sos) in enumerate(zip(self.bands, self._sos.values())):

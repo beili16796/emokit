@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -85,6 +86,8 @@ _EEG_CHANNELS: list[str] = [
 ]
 
 _EOG_CHANNELS: list[str] = ["hEOG", "vEOG", "hEOG2"]
+_EYE_FEATURE_DIM: int = 33
+_EYE_FEATURE_NAMES: list[str] = [f"eye_feat_{i:02d}" for i in range(_EYE_FEATURE_DIM)]
 
 _EMOTION_LABELS: list[str] = ["happy", "fear", "neutral", "sad", "disgust"]
 
@@ -132,6 +135,7 @@ class SEEDVDataset(BaseDataset):
         modalities: list[str] | None = None,
         sessions: list[int] | None = None,
         use_de_features: bool = True,
+        use_eye_features: bool = True,
     ) -> None:
         super().__init__(
             root=root,
@@ -142,6 +146,7 @@ class SEEDVDataset(BaseDataset):
         )
         self.sessions = sessions or list(range(1, _N_SESSIONS + 1))
         self.use_de_features = use_de_features
+        self.use_eye_features = use_eye_features
         self._pre_extracted: bool = use_de_features
 
     @property
@@ -158,7 +163,11 @@ class SEEDVDataset(BaseDataset):
         if modality == "eeg":
             return list(_EEG_CHANNELS)
         if modality == "eog":
-            return list(_EOG_CHANNELS)
+            return (
+                list(_EYE_FEATURE_NAMES)
+                if self.use_de_features and self.use_eye_features
+                else list(_EOG_CHANNELS)
+            )
         raise EmoKitDataError(f"Unknown SEED-V modality '{modality}'")
 
     def get_label_names(self) -> list[str]:
@@ -173,6 +182,16 @@ class SEEDVDataset(BaseDataset):
         patterns = [
             self.root / "EEG_DE_features" / f"{subject_id}_123.npz",
             self.root / f"{subject_id}_123.npz",
+        ]
+        for p in patterns:
+            if p.exists():
+                return p
+        return None
+
+    def _find_eye_npz(self, subject_id: int) -> Path | None:
+        """Find the eye-feature NPZ file for a subject."""
+        patterns = [
+            self.root / "Eye_movement_features" / f"{subject_id}_123.npz",
         ]
         for p in patterns:
             if p.exists():
@@ -194,21 +213,27 @@ class SEEDVDataset(BaseDataset):
         """
         npz = np.load(str(npz_path), allow_pickle=True)
 
-        data_raw = npz["data"]
-        if data_raw.shape == ():
-            data_dict = pickle.loads(data_raw.item())
-        elif hasattr(data_raw, "item"):
-            data_dict = data_raw.item()
-        else:
-            data_dict = data_raw
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=".*dtype.*align.*",
+                category=np.VisibleDeprecationWarning,
+            )
+            data_raw = npz["data"]
+            if data_raw.shape == ():
+                data_dict = pickle.loads(data_raw.item())
+            elif hasattr(data_raw, "item"):
+                data_dict = data_raw.item()
+            else:
+                data_dict = data_raw
 
-        label_raw = npz["label"]
-        if label_raw.shape == ():
-            label_dict = pickle.loads(label_raw.item())
-        elif hasattr(label_raw, "item"):
-            label_dict = label_raw.item()
-        else:
-            label_dict = label_raw
+            label_raw = npz["label"]
+            if label_raw.shape == ():
+                label_dict = pickle.loads(label_raw.item())
+            elif hasattr(label_raw, "item"):
+                label_dict = label_raw.item()
+            else:
+                label_dict = label_raw
 
         de_list: list[np.ndarray] = []
         lbl_list: list[np.ndarray] = []
@@ -229,6 +254,52 @@ class SEEDVDataset(BaseDataset):
         de = np.concatenate(de_list, axis=0)
         labels = np.concatenate(lbl_list, axis=0)
         return de, labels
+
+    def _load_eye_npz(self, npz_path: Path) -> tuple[np.ndarray, np.ndarray]:
+        """Load pre-extracted eye-movement features from NPZ."""
+        npz = np.load(str(npz_path), allow_pickle=True)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=".*dtype.*align.*",
+                category=np.VisibleDeprecationWarning,
+            )
+            data_raw = npz["data"]
+            if data_raw.shape == ():
+                data_dict = pickle.loads(data_raw.item())
+            elif hasattr(data_raw, "item"):
+                data_dict = data_raw.item()
+            else:
+                data_dict = data_raw
+
+            label_raw = npz["label"]
+            if label_raw.shape == ():
+                label_dict = pickle.loads(label_raw.item())
+            elif hasattr(label_raw, "item"):
+                label_dict = label_raw.item()
+            else:
+                label_dict = label_raw
+
+        feat_list: list[np.ndarray] = []
+        lbl_list: list[np.ndarray] = []
+        for trial_id in range(_N_TOTAL_TRIALS):
+            trial_feat = np.asarray(data_dict[trial_id], dtype=np.float64)
+            if trial_feat.ndim == 1:
+                trial_feat = trial_feat[:, None]
+            feat_list.append(trial_feat)
+
+            trial_lbl = np.asarray(label_dict[trial_id], dtype=np.int64)
+            n_windows = trial_feat.shape[0]
+            if trial_lbl.ndim == 0:
+                trial_lbl = np.full(n_windows, int(trial_lbl), dtype=np.int64)
+            elif len(trial_lbl) != n_windows:
+                trial_lbl = np.full(n_windows, int(trial_lbl[0]), dtype=np.int64)
+            lbl_list.append(trial_lbl)
+
+        feats = np.concatenate(feat_list, axis=0)
+        labels = np.concatenate(lbl_list, axis=0)
+        return feats, labels
 
     # ------------------------------------------------------------------
     # MAT loading (fallback)
@@ -361,7 +432,18 @@ class SEEDVDataset(BaseDataset):
             logger.info("Loading %s via NPZ", npz_path)
             de, labels = self._load_npz(npz_path)
             self._pre_extracted = True
-            return {"eeg": de, "labels": labels}
+            result: dict[str, np.ndarray] = {"eeg": de, "labels": labels}
+            eye_npz_path = self._find_eye_npz(subject_id)
+            if eye_npz_path is not None and self.use_eye_features:
+                logger.info("Loading %s via NPZ", eye_npz_path)
+                eye_feat, eye_labels = self._load_eye_npz(eye_npz_path)
+                if len(eye_labels) != len(labels) or not np.array_equal(eye_labels, labels):
+                    logger.warning(
+                        "Eye feature labels mismatch for subject %d; using EEG labels",
+                        subject_id,
+                    )
+                result["eog"] = eye_feat
+            return result
 
         all_eeg: list[np.ndarray] = []
         all_eog: list[np.ndarray] = []

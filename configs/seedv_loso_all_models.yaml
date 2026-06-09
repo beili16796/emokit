@@ -11,10 +11,11 @@ dataset:
   subjects: null
   window_sec: 4.0
   overlap: 0.5
-  modalities: [eeg]
+  modalities: [eeg, eog]
   label_axis: five_class
   params:
     use_de_features: true
+    use_eye_features: true
 
 feature_pipeline:
   steps:
@@ -35,7 +36,7 @@ models_to_run:
     params:
       n_classes: 5
       n_feat1: 310
-      n_feat2: 3
+      n_feat2: 33
       n_epochs: 50
   - name: DGCNN
     params:
@@ -49,14 +50,8 @@ models_to_run:
       n_classes: 5
       n_channels: 62
       n_bands: 5
+      n_peripheral_feat: 33
       d_model: 64
-      n_epochs: 50
-  - name: DGCCA-AM
-    params:
-      n_classes: 5
-      n_feat_eeg: 310
-      n_feat_gsr: 3
-      n_feat_ecg: 5
       n_epochs: 50
   - name: PR-PL
     params:

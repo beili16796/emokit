@@ -4,6 +4,10 @@ EmoKit expects datasets under a single root directory pointed to by the
 `EMOKIT_DATA_ROOT` environment variable (or passed via `--root` /
 `root=` in the config YAML).
 
+EmoKit does not redistribute DEAP, SEED, SEED-V, DREAMER, or MAHNOB-HCI;
+users should download each dataset from its official provider and point EmoKit
+to their local copies.
+
 ```bash
 export EMOKIT_DATA_ROOT=/path/to/datasets
 ```
