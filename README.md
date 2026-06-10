@@ -189,8 +189,8 @@ print(f"Mean accuracy: {results['mean']['accuracy']:.4f}")
 Verify your dataset setup (see [`docs/dataset_setup.md`](docs/dataset_setup.md)):
 
 ```bash
-python scripts/verify_dreamer_pipeline.py --root /data/ssd/xwt/DREAMER
-python scripts/verify_hci_pipeline.py --root /path/to/MAHNOB-HCI
+python -m emokit.scripts.verify_dreamer_pipeline --root $EMOKIT_DATA_ROOT/DREAMER
+python scripts/verify_hci_pipeline.py --root $EMOKIT_DATA_ROOT/MAHNOB-HCI
 python -m emokit.scripts.verify_deap_pipeline --root /path/to/DEAP
 python -m emokit.scripts.verify_seedv_pipeline --root /path/to/SEED-V
 ```

@@ -187,7 +187,7 @@ python scripts/verify_hci_pipeline.py --root $EMOKIT_DATA_ROOT/MAHNOB-HCI
 
 Single `DREAMER.mat` file containing all 23 subjects × 18 video clips.
 
-**Default path**: `/data/ssd/xwt/DREAMER/DREAMER.mat`
+**Default path**: `$EMOKIT_DATA_ROOT/DREAMER/DREAMER.mat`
 
 ```
 $EMOKIT_DATA_ROOT/DREAMER/
@@ -222,7 +222,7 @@ dreamer.Data[i]             # subject i (0-indexed, 23 subjects)
 
 **Verification**:
 ```bash
-python scripts/verify_dreamer_pipeline.py --root /data/ssd/xwt/DREAMER
+python -m emokit.scripts.verify_dreamer_pipeline --root $EMOKIT_DATA_ROOT/DREAMER
 ```
 
 ---

@@ -10,7 +10,7 @@ Conditions:
 Usage::
 
     python -m emokit.scripts.augmentation_ablation \
-        --root /data/ssd/shared_data/DEAP \
+        --root $EMOKIT_DATA_ROOT/DEAP \
         --device cuda \
         --output results/augmentation_ablation.json
 """

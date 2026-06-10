@@ -6,8 +6,9 @@ __pycache__/
 dist/
 build/
 
-# Tests / coverage
+# Tests / coverage / linters
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
