@@ -5,7 +5,7 @@ experiment:
 
 dataset:
   name: DREAMER
-  root: /data/ssd/xwt/DREAMER
+  root: ${EMOKIT_DATA_ROOT}/DREAMER
   subjects: null
   window_sec: 4.0
   overlap: 0.5

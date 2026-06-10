@@ -25,7 +25,7 @@ from scipy.io import loadmat
 from scipy.signal import resample_poly
 
 from emokit.datasets.base import _REGISTRY, BaseDataset, segment_trials
-from emokit.utils import EmoKitDataError
+from emokit.utils import EmoKitDataError, get_data_root
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class DREAMERDataset(BaseDataset):
 
     Args:
         root: Directory containing ``DREAMER.mat``.  Defaults to
-            ``/data/ssd/xwt/DREAMER``.
+            ``$EMOKIT_DATA_ROOT/DREAMER`` (see ``get_data_root()``).
         subjects: Subject IDs to load (1-based, 1–23).
         window_sec: Sliding-window length in seconds.
         overlap: Fractional overlap for the sliding window.
@@ -92,7 +92,7 @@ class DREAMERDataset(BaseDataset):
         baseline_correct: bool = True,
     ) -> None:
         if root is None:
-            root = "/data/ssd/xwt/DREAMER"
+            root = str(get_data_root() / "DREAMER")
         super().__init__(
             root=root,
             subjects=subjects,
