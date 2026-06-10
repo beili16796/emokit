@@ -437,7 +437,9 @@ class SEEDVDataset(BaseDataset):
             if eye_npz_path is not None and self.use_eye_features:
                 logger.info("Loading %s via NPZ", eye_npz_path)
                 eye_feat, eye_labels = self._load_eye_npz(eye_npz_path)
-                if len(eye_labels) != len(labels) or not np.array_equal(eye_labels, labels):
+                if len(eye_labels) != len(labels) or not np.array_equal(
+                    eye_labels, labels
+                ):
                     logger.warning(
                         "Eye feature labels mismatch for subject %d; using EEG labels",
                         subject_id,

@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import copy
 import logging
 from typing import Any
 
@@ -14,7 +13,6 @@ import numpy as np
 
 from emokit.datasets.base import BaseDataset
 from emokit.evaluation.protocols import (
-    _build_pipeline_from_config,
     _clone_pipeline,
     _prepare_model_features,
     _stratified_val_split_any,
@@ -28,16 +26,69 @@ logger = logging.getLogger(__name__)
 
 # Standard 10-20 system channel names (superset for matching)
 _STANDARD_10_20 = {
-    "FP1", "FP2", "FPZ",
-    "AF3", "AF4", "AFZ", "AF7", "AF8",
-    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "FZ",
-    "FC1", "FC2", "FC3", "FC4", "FC5", "FC6", "FCZ", "FT7", "FT8",
-    "C1", "C2", "C3", "C4", "C5", "C6", "CZ",
-    "T7", "T8", "TP7", "TP8",
-    "CP1", "CP2", "CP3", "CP4", "CP5", "CP6", "CPZ",
-    "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "PZ",
-    "PO3", "PO4", "PO5", "PO6", "PO7", "PO8", "POZ",
-    "O1", "O2", "OZ",
+    "FP1",
+    "FP2",
+    "FPZ",
+    "AF3",
+    "AF4",
+    "AFZ",
+    "AF7",
+    "AF8",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "FZ",
+    "FC1",
+    "FC2",
+    "FC3",
+    "FC4",
+    "FC5",
+    "FC6",
+    "FCZ",
+    "FT7",
+    "FT8",
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "CZ",
+    "T7",
+    "T8",
+    "TP7",
+    "TP8",
+    "CP1",
+    "CP2",
+    "CP3",
+    "CP4",
+    "CP5",
+    "CP6",
+    "CPZ",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8",
+    "PZ",
+    "PO3",
+    "PO4",
+    "PO5",
+    "PO6",
+    "PO7",
+    "PO8",
+    "POZ",
+    "O1",
+    "O2",
+    "OZ",
 }
 
 
@@ -208,7 +259,9 @@ class CrossCorpusEvaluator:
                 metrics["f1_macro"],
             )
 
-        metric_keys = [k for k in next(iter(per_subject.values())) if k != "confusion_matrix"]
+        metric_keys = [
+            k for k in next(iter(per_subject.values())) if k != "confusion_matrix"
+        ]
         values = {k: [m[k] for m in per_subject.values()] for k in metric_keys}
 
         return {

@@ -178,7 +178,9 @@ def _override_roots(cfg: Any, args: argparse.Namespace, dataset_key: str) -> Any
     if dataset_root:
         updates["dataset"] = cfg.dataset.model_copy(update={"root": dataset_root})
     if args.device:
-        updates["experiment"] = cfg.experiment.model_copy(update={"device": args.device})
+        updates["experiment"] = cfg.experiment.model_copy(
+            update={"device": args.device}
+        )
     if updates:
         return cfg.model_copy(update=updates)
     return cfg
@@ -321,7 +323,10 @@ def _check_paper_claims(results: dict[str, Any]) -> None:
             if result is None:
                 print(f"MISSING {exp_key}")
                 continue
-            if dataset == "SEEDV" and result.get("config", {}).get("protocol") == "loso":
+            if (
+                dataset == "SEEDV"
+                and result.get("config", {}).get("protocol") == "loso"
+            ):
                 print(
                     f"{model:15s} {metric_key:18s} "
                     "[SKIP: protocol mismatch, paper uses subject-dependent split]"
@@ -354,7 +359,9 @@ def run_all(args: argparse.Namespace) -> None:
     if args.datasets:
         allowed = {_DATASET_ALIASES.get(d.lower(), d.upper()) for d in args.datasets}
         experiments = [exp for exp in EXPERIMENTS if exp[1] in allowed]
-        logger.info("Filtered to datasets %s (%d experiments)", allowed, len(experiments))
+        logger.info(
+            "Filtered to datasets %s (%d experiments)", allowed, len(experiments)
+        )
 
     for cfg_path, dataset_key, _axis, exp_key in experiments:
         if exp_key in results_all:
@@ -426,7 +433,9 @@ def main() -> None:
         default=None,
         help="Filter experiments to specific datasets (e.g. deap seedv dreamer)",
     )
-    parser.add_argument("--device", default=None, help="Override device (e.g. cuda, cpu)")
+    parser.add_argument(
+        "--device", default=None, help="Override device (e.g. cuda, cpu)"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--mock-run",

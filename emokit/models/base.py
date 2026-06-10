@@ -197,10 +197,16 @@ class BaseModel(ABC):
                 if isinstance(nested, dict):
                     state = nested
                     break
-        if isinstance(state, dict) and state and all(
-            isinstance(key, str) and key.startswith("network.") for key in state
+        if (
+            isinstance(state, dict)
+            and state
+            and all(
+                isinstance(key, str) and key.startswith("network.") for key in state
+            )
         ):
-            state = {key.removeprefix("network."): value for key, value in state.items()}
+            state = {
+                key.removeprefix("network."): value for key, value in state.items()
+            }
         self.network.load_state_dict(state)
         self.network.to(self.device)
         logger.info("Model loaded from %s", path)
@@ -361,10 +367,15 @@ class StandardTrainer:
             loss_fn = nn.CrossEntropyLoss()
 
         optimizer = torch.optim.Adam(
-            model.parameters(), lr=self.lr, weight_decay=1e-4,
+            model.parameters(),
+            lr=self.lr,
+            weight_decay=1e-4,
         )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=5,
+            optimizer,
+            mode="min",
+            factor=0.5,
+            patience=5,
         )
 
         has_val = val_loader is not None
@@ -428,10 +439,9 @@ class StandardTrainer:
 
             stop_metric = val_acc if has_val else avg_loss
             if stopper is not None:
-                if has_val and (
-                    stopper.best is None or val_acc > stopper.best
-                ):
+                if has_val and (stopper.best is None or val_acc > stopper.best):
                     import copy
+
                     best_state = copy.deepcopy(model.state_dict())
                 if stopper(stop_metric):
                     logger.info("Early stopping at epoch %d", epoch + 1)

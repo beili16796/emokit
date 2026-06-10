@@ -141,8 +141,7 @@ class TemporalSegmentPermutation(BaseTransform):
         if seg_len < 1:
             return sample
         segments = [
-            sample[..., i * seg_len : (i + 1) * seg_len]
-            for i in range(self.n_segments)
+            sample[..., i * seg_len : (i + 1) * seg_len] for i in range(self.n_segments)
         ]
         remainder = sample[..., self.n_segments * seg_len :]
         order = rng.permutation(self.n_segments)

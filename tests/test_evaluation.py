@@ -268,7 +268,10 @@ class TestLOSOEvaluator:
             model_config={"n_classes": 2},
             model_name="_TestLogReg",
             seed=11,
-            output_config={"results_dir": str(tmp_path / "loso_resume"), "resume": True},
+            output_config={
+                "results_dir": str(tmp_path / "loso_resume"),
+                "resume": True,
+            },
         )
         results = evaluator.run()
         progress_path = tmp_path / "loso_resume" / "loso_progress.json"

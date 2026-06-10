@@ -51,10 +51,7 @@ def _dataset_kwargs(dataset_cfg: Any) -> dict[str, Any]:
 def _build_evaluator(
     cfg: FullConfig,
 ) -> (
-    LOSOEvaluator
-    | SubjectDependentEvaluator
-    | SessionEvaluator
-    | CrossCorpusEvaluator
+    LOSOEvaluator | SubjectDependentEvaluator | SessionEvaluator | CrossCorpusEvaluator
 ):
     """Instantiate dataset, feature pipeline, and the correct evaluator."""
     from emokit.datasets import load_dataset

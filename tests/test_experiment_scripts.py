@@ -32,7 +32,9 @@ def test_run_all_experiments_dry_run(tmp_path: Path) -> None:
     assert "protocol mismatch" in result.stdout
 
 
-def test_config_env_expansion_and_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_config_env_expansion_and_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("EMOKIT_DATA_ROOT", str(tmp_path))
     base = tmp_path / "base.yaml"
     base.write_text(
@@ -43,8 +45,7 @@ def test_config_env_expansion_and_base(tmp_path: Path, monkeypatch: pytest.Monke
     )
     child = tmp_path / "child.yaml"
     child.write_text(
-        "_base_: base.yaml\n"
-        "experiment:\n  name: child\n",
+        "_base_: base.yaml\n" "experiment:\n  name: child\n",
         encoding="utf-8",
     )
     cfg = ConfigLoader.load(str(child))

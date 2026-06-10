@@ -55,7 +55,9 @@ def verify(root: str, subject_id: int) -> None:
         if eeg.shape[0] != _N_VIDEOS:
             errors.append(f"Expected {_N_VIDEOS} trials, got {eeg.shape[0]}")
         if eeg.shape[1] != _N_EEG_CHANNELS:
-            errors.append(f"Expected {_N_EEG_CHANNELS} EEG channels, got {eeg.shape[1]}")
+            errors.append(
+                f"Expected {_N_EEG_CHANNELS} EEG channels, got {eeg.shape[1]}"
+            )
         if np.any(np.isnan(eeg)):
             errors.append("EEG contains NaN values")
         if np.any(np.isinf(eeg)):
@@ -69,14 +71,17 @@ def verify(root: str, subject_id: int) -> None:
         if ecg.shape[0] != _N_VIDEOS:
             errors.append(f"Expected {_N_VIDEOS} ECG trials, got {ecg.shape[0]}")
         if ecg.shape[1] != _N_ECG_CHANNELS:
-            errors.append(f"Expected {_N_ECG_CHANNELS} ECG channels, got {ecg.shape[1]}")
+            errors.append(
+                f"Expected {_N_ECG_CHANNELS} ECG channels, got {ecg.shape[1]}"
+            )
         if np.any(np.isnan(ecg)):
             errors.append("ECG contains NaN values")
 
         # ECG and EEG should have comparable time dimensions after downsampling
         if eeg is not None and abs(ecg.shape[2] - eeg.shape[2]) > 5:
             errors.append(
-                f"EEG/ECG time mismatch after downsample: EEG={eeg.shape[2]}, ECG={ecg.shape[2]}"
+                "EEG/ECG time mismatch after downsample: "
+                f"EEG={eeg.shape[2]}, ECG={ecg.shape[2]}"
             )
 
     # --- Label checks ---
@@ -88,7 +93,10 @@ def verify(root: str, subject_id: int) -> None:
     if not unique_labels.issubset({0, 1}):
         errors.append(f"Labels should be binary {{0,1}}, got {unique_labels}")
 
-    print(f"Label distribution: 0={int((labels == 0).sum())}, 1={int((labels == 1).sum())}")
+    print(
+        "Label distribution: "
+        f"0={int((labels == 0).sum())}, 1={int((labels == 1).sum())}"
+    )
 
     # --- Windowing check ---
     print(f"\nWindowing test ({_WINDOW_SEC}s window, 50% overlap):")
@@ -99,22 +107,28 @@ def verify(root: str, subject_id: int) -> None:
     # load() concatenates all modalities: EEG(14) + ECG(2) = 16
     expected_channels = _N_EEG_CHANNELS + _N_ECG_CHANNELS
     if X.shape[1] != expected_channels:
-        errors.append(f"Windowed X has {X.shape[1]} channels, expected {expected_channels}")
+        errors.append(
+            f"Windowed X has {X.shape[1]} channels, expected {expected_channels}"
+        )
     if X.shape[2] != win_samples:
         errors.append(f"Windowed X has {X.shape[2]} samples, expected {win_samples}")
     if np.any(np.isnan(X)):
         errors.append("Windowed X contains NaN")
 
-    print(f"  Subject {subject_id}: EEG({X.shape[0]}, {X.shape[1]}, {X.shape[2]}) "
-          f"Labels{{0:{int((y == 0).sum())}, 1:{int((y == 1).sum())}}} "
-          f"{'No NaN' if not np.any(np.isnan(X)) else 'HAS NaN!'}")
+    print(
+        f"  Subject {subject_id}: EEG({X.shape[0]}, {X.shape[1]}, {X.shape[2]}) "
+        f"Labels{{0:{int((y == 0).sum())}, 1:{int((y == 1).sum())}}} "
+        f"{'No NaN' if not np.any(np.isnan(X)) else 'HAS NaN!'}"
+    )
 
     if errors:
         print(f"\n{'='*60}")
         print(f"ERRORS ({len(errors)}):")
         for e in errors:
             print(f"  - {e}")
-        raise RuntimeError(f"DREAMER pipeline verification failed with {len(errors)} errors")
+        raise RuntimeError(
+            f"DREAMER pipeline verification failed with {len(errors)} errors"
+        )
 
     print(f"\n{'='*60}")
     print("ALL CHECKS PASSED")
